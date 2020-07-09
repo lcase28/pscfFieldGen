@@ -1,0 +1,3 @@
+[submodule "crystal_structs"]
+	path = crystal_structs
+	url = https://github.umn.edu/case0234/crystal_structs.git
