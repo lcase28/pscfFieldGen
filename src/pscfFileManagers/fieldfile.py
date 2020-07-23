@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from .iotools import IO, IOException
 import numpy as np
+from pathlib import Path
 from .version import Version
 import string
 import sys
@@ -496,21 +497,32 @@ class WaveVectFieldFile(FieldFile):
 
     # "Public" methods
 
-    def __init__(self,filename,skipField=False):
+    def __init__(self,filename=None,skipField=False):
         '''
         Read a PSCF symmetry-adapted field file, and create a new object.
 
         Argument:
-        filename -- name of file
+        filename -- name of file. If None, a default template will be used.
         skipField -- when input file is being used for templating,
                     this will trigger initialization to not attempt to
                     read the field values. (this way, template for new phase
                     does not need to exactly meet grid counts)
 
         The file named filename is opened and closed within this function.
+        
+        Default template used if user wishes to manually set all object data.
+        It serves to create a stable object which can be modified.
         '''
         self.ngrid = [1] # Actual Value read during _readField call
         self.fields = []
+        
+        if filename is None:
+            import inspect
+            thisFileString = inspect.getsourcefile(FieldFile)
+            thisFilePath = Path(thisFileString)
+            thisFileRoot = thisFilePath.parent
+            filename = thisFileRoot / "Default_Wave_Vect_Field_File"
+            skipField = True
         
         self.skipFieldFlag = skipField
         

@@ -102,14 +102,16 @@ class FieldCalculator(object):
             Lattice.latticeFromParameters(dim = self.dim, **self.__defaultParams))
         self.reciprocal_lattice = self.lattice.reciprocal
         crystalStyle = kwargs.get("coord_input_style", "motif")
-        self.particles = kwargs.get("particlePositions",None)
-        self.nparticles = kwargs.get("N_particles")
+        groupName = kwargs.get("groupName")
+        particles = kwargs.get("particlePositions",None)
+        nparticles = kwargs.get("N_particles")
         if self.dim == 3:
             defPartForm = SphereForm
         elif self.dim == 2:
             defPartForm = Circle2DForm
         self.partForm = kwargs.get("formfactor", defPartForm)
         self.crystal = buildCrystal(crystalStyle,nparticles, particles,partForm,groupName)
+        self.nparticles = self.crystal.n_particles
         self.smear = kwargs.get("sigma_smear", 0.0)
         # Cache pre-calculated results which can be recycled whenever ngrid is same
         self._cached_results = dict()
@@ -284,11 +286,11 @@ class FieldCalculator(object):
         """
         R = 0
         I = 0
-        for i in range(self.nparticles):
+        for r in self.crystal.particlePositions():
             # By definition of reciprocal space lattice,
             #   dot product of q (recip) and r (real) 
             #   calculated same as normal (b/c a_i dot a*_j = delta_ij )
-            qR = 2 * np.pi * np.dot(q, self.particles[i,:])
+            qR = 2 * np.pi * np.dot(q, r) #self.particles[i,:])
             R = R + np.cos(qR)
             I = I + np.sin(qR)
         
