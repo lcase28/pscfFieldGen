@@ -1,0 +1,15 @@
+  format    1   0
+dim
+                3
+crystal_system
+                'cubic'
+N_cell_param
+                1
+cell_param
+                1.0
+group_name
+                'I m -3 m'
+N_monomer
+                2
+ngrid
+                24          24
