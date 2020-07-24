@@ -2,10 +2,10 @@
 from crystal_structs.crystalStructs.lattice import Lattice
 from crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
 from crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
-from .particleForms import ParticleForm, SphereForm, Circle2DForm
+from fieldGeneration.particleForms import ParticleForm, SphereForm, Circle2DForm
 import numpy as np
 import scipy as sp
-from .stringTools import str_to_num, wordsGenerator
+from fieldGeneration.stringTools import str_to_num, wordsGenerator
 import pathlib
 import itertools
 import re
