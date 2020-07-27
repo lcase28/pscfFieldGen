@@ -1,5 +1,6 @@
 # Library imports
 from fieldGeneration.crystal_structs.crystalStructs.lattice import Lattice
+from fieldGeneration.crystal_structs.crystalStructs.crystal import ParticleBase
 from fieldGeneration.fieldGenerators import FieldCalculator
 from fieldGeneration.pscfFileManagers.paramfile import expandLatticeParameters, getInterfaceWidth, getMonomerFractions, ParamFile
 from fieldGeneration.pscfFileManagers.fieldfile import WaveVectFieldFile
@@ -53,9 +54,11 @@ def generate_field_file(param, calculator, kgridFileName, kgrid=None):
     
 
 if __name__=="__main__":
+    ParticleBase.POSITION_TOLERANCE = 0.001
     # Get command file from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--file","-f", type=str, required=True)
+    parser.add_argument("--trace","-t", action='store_true')
     args = parser.parse_args()
     filepath = Path(args.file)
     # Set initial flags
@@ -126,6 +129,12 @@ if __name__=="__main__":
                                 coord_input_style = input_style, \
                                 systemName = crystal_system, \
                                 groupName = group_name)
+    if args.trace:
+        print(lattice)
+        print(lattice.latticeParameters)
+        print(calculator.crystal)
+        for p in calculator.crystal.particlePositions():
+            print(p)
     # Generate File
     generate_field_file(param, calculator, outFile)
             
