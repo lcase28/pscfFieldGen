@@ -643,15 +643,19 @@ class WaveVectFieldFile(FieldFile):
             
         return True
     
+    @property
+    def gridPoints(self):
+        gp = int(self.ngrid[0] / 2) + 1
+        for i in range(self.dim-1):
+            gp = gp * self.ngrid[1+i]
+        return gp
+        
+    
     # "Private" methods
     
     # overriding inherited private abstract methods
     def _readField(self):
         self.ngrid = self._input_vec('int', n=self.dim, comment='ngrid')
-        gp = int(self.ngrid[0] / 2) + 1
-        for i in range(self.dim-1):
-            gp = gp * self.ngrid[1+i]
-        self.gridPoints = gp
         self.fields = 1j*np.zeros((self.gridPoints,self.N_monomer))
         if not self.skipFieldFlag:
             for i in range(self.gridPoints):

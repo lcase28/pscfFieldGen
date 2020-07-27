@@ -1,19 +1,21 @@
 # Library imports
-from crystal_structs.crystalStructs.lattice import Lattice
-from .fieldGenerators import FieldCalculator
-from pscfFileManagers.paramfile import expandLatticeParameters, getInterfaceWidth, getMonomerFractions, ParamFile
-from pscfFileManagers.fieldfile import WaveVectFieldFile
-from stringTools import str_to_num, wordsGenerator
+from fieldGeneration.crystal_structs.crystalStructs.lattice import Lattice
+from fieldGeneration.fieldGenerators import FieldCalculator
+from fieldGeneration.pscfFileManagers.paramfile import expandLatticeParameters, getInterfaceWidth, getMonomerFractions, ParamFile
+from fieldGeneration.pscfFileManagers.fieldfile import WaveVectFieldFile
+from fieldGeneration.stringTools import str_to_num, wordsGenerator
 
 # Standard Library Imports
 import argparse
 from copy import deepcopy
+import numpy as np
 from pathlib import Path
 
-def generate_field_file(param, calculator, kgridFile, kgridTemplate=None):
+
+def generate_field_file(param, calculator, kgridFileName, kgrid=None):
     """
     From the given ParamFile (param), and FieldCalculator (calculator),
-    generate an initial guess field file at kgridFile.
+    generate an initial guess field file at kgridFileName.
     
     No check is done to verify compatibility between calculator and param. These checks
     are the caller's responsibility.
@@ -24,9 +26,9 @@ def generate_field_file(param, calculator, kgridFile, kgridTemplate=None):
         The param file being used with the field
     calculator : fieldGenerators.FieldCalculator
         The FieldCalculator used to do the field calculation.
-    kgridFile : pathlib.Path or string
+    kgridFileName : pathlib.Path or string
         The path and file name to which to write the resulting field file.
-    kgridTemplate : pscfFileManagers.fieldfile.WaveVectFieldFile (optional)
+    kgrid : pscfFileManagers.fieldfile.WaveVectFieldFile (optional)
         If given, assumed to match param and calculator, and is updated to hold
         the resultant field. 
         If None, a new WaveVectFieldFile is instantiated to match
@@ -47,7 +49,7 @@ def generate_field_file(param, calculator, kgridFile, kgridTemplate=None):
         kgrid.N_monomer = param.N_monomer
         kgrid.ngrid = ngrid
     kgrid.fields = newField
-    kgrid.write(kgridFile.open(mode='x'))
+    kgrid.write(kgridFileName.open(mode='x'))
     
 
 if __name__=="__main__":
@@ -93,6 +95,10 @@ if __name__=="__main__":
             elif word == 'output_file':
                 outfilestring = next(words)
                 outFile = Path(outfilestring)
+                hasOutFile = True
+            elif word == 'finish':
+                #do nothing
+                doneFlag = True
             else:
                 raise(NotImplementedError("No operation has been set for keyword {}.".format(word)))
     # Check for presence of required data
@@ -112,11 +118,13 @@ if __name__=="__main__":
     lattice = Lattice.latticeFromParameters(dim, **latticeParams)
     # Create Calculator Object
     group_name = param.group_name
-    calculator = FieldGenerator(dim = dim, \
+    crystal_system = param.crystal_system
+    calculator = FieldCalculator(dim = dim, \
                                 lattice = lattice, \
                                 N_particles = nparticle, \
                                 particlePositions = partPositions, \
                                 coord_input_style = input_style, \
+                                systemName = crystal_system, \
                                 groupName = group_name)
     # Generate File
     generate_field_file(param, calculator, outFile)

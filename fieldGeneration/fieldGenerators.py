@@ -1,7 +1,8 @@
 # Imports
-from crystal_structs.crystalStructs.lattice import Lattice
-from crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
-from crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
+from .crystal_structs.crystalStructs.lattice import Lattice
+from .crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
+from .crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
+from .crystal_structs.crystalStructs.space_groups import SpaceGroup
 from fieldGeneration.particleForms import ParticleForm, SphereForm, Circle2DForm
 import numpy as np
 import scipy as sp
@@ -96,6 +97,12 @@ class FieldCalculator(object):
             Number of particles in the system
         particlePositions : array-like, N_particles by dim
             Positions of particles in coordinates of the basis vectors.
+        coord_input_style : string
+            Either 'basis' or 'motif'
+        systemName : string
+            The crystal system.
+        groupName : string
+            The name of the space group.
         """
         self.dim = kwargs.get("dim", 3)
         self.lattice = kwargs.get("lattice", \
@@ -103,6 +110,8 @@ class FieldCalculator(object):
         self.reciprocal_lattice = self.lattice.reciprocal
         crystalStyle = kwargs.get("coord_input_style", "motif")
         groupName = kwargs.get("groupName")
+        crystal_system = kwargs.get("systemName")
+        group = SpaceGroup(self.dim, crystal_system, groupName)
         particles = kwargs.get("particlePositions",None)
         nparticles = kwargs.get("N_particles")
         if self.dim == 3:
@@ -110,7 +119,7 @@ class FieldCalculator(object):
         elif self.dim == 2:
             defPartForm = Circle2DForm
         self.partForm = kwargs.get("formfactor", defPartForm)
-        self.crystal = buildCrystal(crystalStyle,nparticles, particles,partForm,groupName)
+        self.crystal = buildCrystal(crystalStyle,nparticles, particles,self.partForm,self.lattice,group)
         self.nparticles = self.crystal.n_particles
         self.smear = kwargs.get("sigma_smear", 0.0)
         # Cache pre-calculated results which can be recycled whenever ngrid is same
@@ -185,7 +194,6 @@ class FieldCalculator(object):
                 kwargs.update([(key, data)])
             return cls(**kwargs)
     
-    # TODO: Figure out how to generate 2D, 1D initial guesses
     def to_kgrid(self, frac, ngrid,interfaceWidth=None):
         """
             Return the reciprocal space grid of densities.

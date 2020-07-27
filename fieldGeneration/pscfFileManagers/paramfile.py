@@ -104,7 +104,7 @@ def getMonomerFractions(param):
         raise(ValueError("The given parameter file must contain at least one polymer chain"))
     # compositions will be stored here
     frac = np.zeros(nmonomer)
-    if nchain == 1 && nsolvent == 0:
+    if nchain == 1 and nsolvent == 0:
         Ntot = 0.0
         nblock = param.N_block[0]
         for b in range(nblock):
