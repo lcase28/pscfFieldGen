@@ -2,6 +2,9 @@
 
 A tool to generate PSCF initial guess files for spherical or cylindrical morphologies.
 
+**NOTE:** This is a beta release. See Notes section at the bottom of this file for special
+assumptions made in its operation.
+
 ## Installation
 
 Add installation instructions.
@@ -10,7 +13,7 @@ Add installation instructions.
 
 Running the software requires 2 files:
 
- * A Structure file specifying filenames and particle positions.
+ * A Model file specifying filenames and particle positions.
  * A PSCF Fortran parameter file.
 
 In order to simplify input for the user, crystallographic and composition information
@@ -19,4 +22,6 @@ the Fortran version of the software are supported.
 
 ### Model File
 
-Details about the model file
+The Model file acts as the primary input for the program. Data in this file is specified
+by keyword. Formatting is flexible, requiring only that each entry be separated by whitespace.
+
