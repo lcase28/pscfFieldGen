@@ -29,37 +29,37 @@ by some amount of whitespace (spaces, tabs, newlines).
 
 Three fields are required:
 
- * 'parameter_file' : This keyword would be followed by a single file name referencing
+ * `parameter_file` : This keyword would be followed by a single file name referencing
 the parameter file. The 'file name' in this case can be any path that would allow the
 file to be found from the current directory.
- * 'N_particles' : This keyword is followed by an integer giving the number of particles
+ * `N_particles` : This keyword is followed by an integer giving the number of particles
 whose positions will be specified in this input file.
- * 'particle_positions' : This keyword would be followed by a list of fractional coordinates
-for each particle. For a 2-Dimensional system, this means 2(<N_particles>) coordinates are
-expected. For a 3-Dimensional system, 3(<N_particles>) coordinates are expected.
-Both <parameter_file> and <N_particles> must be specified before <particle_positions>.
+ * `particle_positions` : This keyword would be followed by a list of fractional coordinates
+for each particle. For a 2-Dimensional system, this means 2(`N_particles`) coordinates are
+expected. For a 3-Dimensional system, 3(`N_particles`) coordinates are expected.
+Both `parameter_file` and `N_particles` must be specified before `particle_positions`.
 
 Three additional fields are recommended, but not required. If omitted, default values will
 be assumed, and a warning message will be printed informing the user that a default will be used.
 Each of these fields can be specified anywhere in the file, but a convention
 for each is given in its description.
 
- * <output_file> : This keyword is followed by a single file name to which the generated field
-should be written. As with <parameter_file>, this can be any path recognizable from the current
+ * `output_file` : This keyword is followed by a single file name to which the generated field
+should be written. As with `parameter_file`, this can be any path recognizable from the current
 directory. When specified, it is recommended that you place this field immediately following the 
-<parameter_file> specification. If not specified, the program defaults to a file <rho_kgrid>.
- * <coord_input_style> : This keyword is followed by one of two flags, _motif_ or _basis_.
+`parameter_file` specification. If not specified, the program defaults to a file 'rho_kgrid'.
+ * `coord_input_style` : This keyword is followed by one of two flags, _motif_ or _basis_.
 If _motif_ is specified, the given particle positions will be used along with space group symmetry
 to generate a full list of particles in the unit cell. If _basis_ is used, the given particle
 positions are assumed to be the full set of particles in the unit cell. When specified, it is
-advised to specify it immediately before <N_particles>. If omitted, the default is _motif_.
- * <core_monomer> : This keyword specifies, by monomer id, which monomer should be taken to form
+advised to specify it immediately before `N_particles`. If omitted, the default is _motif_.
+ * `core_monomer` : This keyword specifies, by monomer id, which monomer should be taken to form
 the core of the particles in the assembly. Monomers are indexed starting at 0 and counting up.
 (This numbering differs from the Fortran numbering, which starts at 1). The default value is 0.
 If specified, it is typically included after the file names, and before structure information.
 
-Finally, the keyword <finish> is followed by no data and identifies the end of the model file.
-Use of the <finish> keyword is entirely optional, and is included as an aesthetic option for
+Finally, the keyword `finish` is followed by no data and identifies the end of the model file.
+Use of the `finish` keyword is entirely optional, and is included as an aesthetic option for
 users who prefer to have explicit file termination markers.
 
 Presence of any unrecognized keywords will raise an error and terminate the program.
@@ -74,9 +74,9 @@ This is done to simplify user input, with the assumption that the user will firs
 the parameter file for the desired calculation, and use it to generate the initial guess.
 **Currently, only parameter files consistent with the Fortran version of the software are valid.**
 
-Within the parameter file, the <MONOMERS>, <CHAINS>, <SOLVENTS>, <COMPOSITION>, <INTERACTIONS>,
-<UNIT_CELL>, <DISCRETIZATION>, and <BASIS> sections are required, along with the <FINISH> keyword.
-Calculation or utility commands (such as <ITERATE>, <SWEEP>, or <KGRID_TO_RGRID>) are not required
+Within the parameter file, the `MONOMERS`, `CHAINS`, `SOLVENTS`, `COMPOSITION`, `INTERACTIONS`,
+`UNIT_CELL`, `DISCRETIZATION`, and `BASIS` sections are required, along with the `FINISH` keyword.
+Calculation or utility commands (such as `ITERATE`, `SWEEP`, or `KGRID_TO_RGRID`) are not required
 for the guess generation to work.
 
 ### Use With C++/Cuda Versions
