@@ -56,7 +56,7 @@ def expandLatticeParameters(param):
             vals = cp
         return dict(zip(keys,vals))
 
-def getInterfaceWidth(param):
+def getInterfaceWidth(param,monomer_index=0):
     """
     For the system described in given ParamFile object, calculate the 
     Helfand-Tagami interfacial width estimate, given by:
@@ -66,16 +66,34 @@ def getInterfaceWidth(param):
     where b is the geometric mean of monomer statistical segment lengths
     and chi is the interaction parameter.
     
-    NOTE: Presently only uses chi between first two monomer types. For
-    systems with more than two monomers, this may not give optimal results.
+    Parameters
+    ----------
+    param : ParamFile
+        An initialized ParamFile object containing system data.
+    monomer_index: int
+        The integer index of the monomer to be treated as the core of the region
+        enclosed by the interface.
+    
+    NOTE: For systems with multiple monomer types, chi is taken to be the geometric
+    mean of all chi parameters involving the core monomer.
     """
     nMon = param.N_monomer
+    if monomer_index >= nMon or monomer_index <= 0:
+        raise(ValueError("Invalid Monomer index ({}) given. Must be in range (0,{}).".format(monomer_index, nMon-1)))
     segLen = np.array(param.kuhn)
     b = (1.0 * np.prod(segLen)) ** (1.0/len(segLen))
     if nMon == 2:
         chi = param.chi[1][0]
     else:
-        chi = param.chi[1][0]
+        chiprod = 1.0
+        for i in range(nMon):
+            if i < monomer_index:
+                chiprod *= param.chi[monomer_index][i]
+            elif i > monomer_index:
+                chiprod *= param.chi[i][monomer_index]
+            else:
+                chiprod *= 1.0
+        chi = chiprod ** (1.0 / (nMon - 1))
     w = 2*b / np.sqrt(6.0 * chi)
     return w
 
