@@ -29,12 +29,12 @@ by some amount of whitespace (spaces, tabs, newlines).
 
 Three fields are required:
 
- * <parameter_file> : This keyword would be followed by a single file name referencing
+ * 'parameter_file' : This keyword would be followed by a single file name referencing
 the parameter file. The 'file name' in this case can be any path that would allow the
 file to be found from the current directory.
- * <N_particles> : This keyword is followed by an integer giving the number of particles
+ * 'N_particles' : This keyword is followed by an integer giving the number of particles
 whose positions will be specified in this input file.
- * <particle_positions> : This keyword would be followed by a list of fractional coordinates
+ * 'particle_positions' : This keyword would be followed by a list of fractional coordinates
 for each particle. For a 2-Dimensional system, this means 2(<N_particles>) coordinates are
 expected. For a 3-Dimensional system, 3(<N_particles>) coordinates are expected.
 Both <parameter_file> and <N_particles> must be specified before <particle_positions>.
