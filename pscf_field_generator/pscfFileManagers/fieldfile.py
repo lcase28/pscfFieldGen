@@ -6,6 +6,8 @@ from .version import Version
 import string
 import sys
 
+__all__ = [ "SymFieldFile", "CoordFieldFile", "WaveVectFieldFile" ]
+
 class FieldFile(ABC):
     '''
         Hold data in a PSCF field file. 

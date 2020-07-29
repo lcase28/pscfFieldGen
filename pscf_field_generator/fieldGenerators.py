@@ -1,37 +1,24 @@
 # Imports
-from .crystal_structs.crystalStructs.lattice import Lattice
-from .crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
-from .crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
-from .crystal_structs.crystalStructs.space_groups import SpaceGroup
-from fieldGeneration.particleForms import ParticleForm, SphereForm, Circle2DForm
+from structure import ( Lattice, 
+                        CrystalBase, 
+                        CrystalMotif, 
+                        buildCrystal, 
+                        SphereForm, 
+                        Circle2DForm, 
+                        SpaceGroup )
+#from .crystal_structs.crystalStructs.lattice import Lattice
+#from .crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
+#from .crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
+#from .crystal_structs.crystalStructs.space_groups import SpaceGroup
+#from fieldGeneration.particleForms import ParticleForm, SphereForm, Circle2DForm
+from util.stringTools import str_to_num, wordsGenerator
+
 import numpy as np
 import scipy as sp
-from fieldGeneration.stringTools import str_to_num, wordsGenerator
 import pathlib
 import itertools
 import re
 from enum import Enum
-
-class ScatteringParticle(ParticleBase):
-    """ Particle with associated Form Factor. """
-    def __init__(self, position, formFactor):
-        self._formFactor = formFactor
-        super().__init__("Micelle", position)
-    
-    def formFactorAmplitude(qnorm, vol, smear):
-        return self._formFactor.formFactorAmplitude(qnorm, vol, smear)
-
-
-def buildCrystal(style, N_particles, positions, formFactor, lattice, space_group=None):
-    initSet = ParticleSet()
-    for i in range(N_particles):
-        p = ScatteringParticle(positions[i,:], formFactor)
-        initSet.addParticle(p)
-    if style == "basis":
-        return CrystalBase(lattice, initSet)
-    else:
-        return CrystalMotif(space_group, initSet, lattice)
-    
 
 class FieldCalculator(object):
     """ Generator class for 3D k-grid density fields of n-monomer systems """
@@ -55,15 +42,13 @@ class FieldCalculator(object):
         def __init__(self, **kwargs):
             """ Generate an empty record. """
             self.brillouin = []
-            self.real = []
-            self.imag = []
+            self.complex_sums = []
             self.qNorm = []
             self.nEntry = 0
         
-        def add(self, brillouin, real, imag, qNorm):
+        def add(self, brillouin, complex_sum, qNorm):
             self.brillouin.append(brillouin)
-            self.real.append(real)
-            self.imag.append(imag)
+            self.complex_sums.append(complex_sum)
             self.qNorm.append(qNorm)
             self.nEntry += 1
             
@@ -76,10 +61,9 @@ class FieldCalculator(object):
             else:
                 for n in range(self.nEntry):
                     b = self.brillouin[n]
-                    r = self.real[n]
-                    i = self.imag[n]
+                    c = self.complex_sums[n]
                     q = self.qNorm[n]
-                    yield (n, b, r, i, q)
+                    yield (n, b, c, q)
         
     def __init__(self, **kwargs):
         """
@@ -194,7 +178,7 @@ class FieldCalculator(object):
                 kwargs.update([(key, data)])
             return cls(**kwargs)
     
-    def to_kgrid(self, frac, ngrid,interfaceWidth=None):
+    def to_kgrid(self, frac, ngrid,interfaceWidth=None, coreindex=0):
         """
             Return the reciprocal space grid of densities.
             
@@ -207,7 +191,6 @@ class FieldCalculator(object):
             ngrid : int, array-like
                 The number of grid points in each (real-space) direction.
         """
-        coreindex = 0
         key = str(tuple(ngrid))
         if key in self._cached_results:
             record = self._cached_results.get(key)
@@ -223,19 +206,19 @@ class FieldCalculator(object):
         particleVol = frac[coreindex] * vol / self.nparticles
         
         # primary loop for n-dimensional generation
-        for (t, brillouin, R, I, q_norm) in record.records():
+        for (t, brillouin, compSum, q_norm) in record.records():
             if t == 0: 
                 # 0-th wave-vector -- corresponds to volume fractions
                 rho[t,:] = frac[:] 
             else:
-                compSum = R + 1j*I
                 ff, fsmear = self.partForm.formFactorAmplitude(q_norm, particleVol, smear = self.smear)
                 if interfaceWidth is not None:
                     fsmear = np.exp(-( (interfaceWidth**2) * q_norm**2) / 2.0)
                 rho[t, coreindex] = compSum * (1/vol) * ff * fsmear
-                rhoTemp = -rho[t, coreindex] / np.sum(frac[1:])
-                for i in range(nspecies-1):
-                    rho[t, i+1] = rhoTemp * frac[i+1]
+                rhoTemp = -rho[t, coreindex] / (1 - frac[coreindex]) #np.sum(frac[1:])
+                for i in range(nspecies):
+                    if not i == coreindex:
+                        rho[t, i] = rhoTemp * frac[i]
                 for (i,r) in enumerate(rho[t,:]):
                     if r == -0.0:
                         rho[t,i] = 0.0
@@ -262,12 +245,13 @@ class FieldCalculator(object):
                 # logical errors regarding use of FieldRecord, run will be
                 # terminated with runtime error.
                 # TODO: clean up handling of 0th wave-vector.
-                f.add(brillouin,None,None,None)
+                f.add(brillouin,None,None)
             else:
                 # sum of wave-vector dot particle positions
                 R, I = self.sum_ff(brillouin)
+                compsum = R + 1j*I
                 q_norm = 2 * np.pi * self.reciprocal_lattice.vectorNorm(brillouin)
-                f.add(brillouin,R,I,q_norm)
+                f.add(brillouin,compsum,q_norm)
         return f
                 
     def sum_ff(self, q):
