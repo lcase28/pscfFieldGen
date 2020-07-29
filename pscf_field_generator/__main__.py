@@ -18,9 +18,10 @@ import argparse
 from copy import deepcopy
 import numpy as np
 from pathlib import Path
+import warnings
 
 
-def generate_field_file(param, calculator, kgridFileName, kgrid=None):
+def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
     """
     From the given ParamFile (param), and FieldCalculator (calculator),
     generate an initial guess field file at kgridFileName.
@@ -36,6 +37,8 @@ def generate_field_file(param, calculator, kgridFileName, kgrid=None):
         The FieldCalculator used to do the field calculation.
     kgridFileName : pathlib.Path or string
         The path and file name to which to write the resulting field file.
+    core : integer
+        The index identifying the monomer to be placed in the core of the particles.
     kgrid : pscfFileManagers.fieldfile.WaveVectFieldFile (optional)
         If given, assumed to match param and calculator, and is updated to hold
         the resultant field. 
@@ -43,9 +46,9 @@ def generate_field_file(param, calculator, kgridFileName, kgrid=None):
         the param file.
     """
     monFrac = getMonomerFractions(param)
-    interface = getInterfaceWidth(param)
+    interface = getInterfaceWidth(param,core)
     ngrid = param.ngrid
-    newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface)
+    newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface, coreindex=core)
     # Create clean field file if needed.
     if kgrid is None:
         kgrid = WaveVectFieldFile()
@@ -68,15 +71,20 @@ if __name__=="__main__":
     parser.add_argument("--trace","-t", action='store_true')
     args = parser.parse_args()
     filepath = Path(args.file)
+    
     # Set initial flags
     hasParam = False
     hasStyle = False
+    hasCore = False
     nparticle = -1
     hasOutFile = False
     hasPositions = False
+    
     # Set default values
     input_style = 'motif'
     outfilestring = 'rho_kgrid'
+    core_monomer = 0
+    
     # Parse input file
     with filepath.open(mode='r') as cmdFile:
         words = wordsGenerator(cmdFile)
@@ -90,8 +98,16 @@ if __name__=="__main__":
                     hasStyle = True
                 else:
                     raise(ValueError("Invalid option, {}, given for coord_input_style".format(input_style)))
+            elif word == 'core_monomer':
+                core_monomer = int(next(words))
+                if core_monomer >= 0:
+                    hasCore = True
+                else:
+                    raise(ValueError("core_monomer must be a non-negative integer. Given {}.".format(core_monomer)))
             elif word == 'N_particles':
                 nparticle = str_to_num(next(words))
+                if nparticle <= 0:
+                    raise(ValueError("Invalid N_particles given ({}). Must be >= 1.".format(nparticle)))
             elif word == 'particle_positions':
                 if nparticle <= 0:
                     raise(ValueError("N_particles must be specified before particle_positions"))
@@ -111,6 +127,7 @@ if __name__=="__main__":
                 doneFlag = True
             else:
                 raise(NotImplementedError("No operation has been set for keyword {}.".format(word)))
+    
     # Check for presence of required data
     if not hasParam:
         raise(ValueError("Input keyword 'parameter_file' must be specified"))
@@ -118,10 +135,14 @@ if __name__=="__main__":
         raise(ValueError("Input keyword 'N_particles' must be specified"))
     if not hasPositions:
         raise(ValueError("Particle coordinates must be specified with keyword 'particle_positions'."))
+    
+    # Warn of absence of optional data and state assumptions.
     if not hasStyle:
-        raise(RuntimeWarning("coord_input_style not specified. 'motif' assumed."))
+        warnings.warn(RuntimeWarning("coord_input_style not specified. 'motif' assumed."))
     if not hasOutFile:
-        raise(RuntimeWarning("Output file name not specified with keyword 'output_file'. Using 'rho_kgrid'."))
+        warnings.warn(RuntimeWarning("Output file name not specified with keyword 'output_file'. Using 'rho_kgrid'."))
+    if not hasCore:
+        warnings.warn(RuntimeWarning("core_monomer not specified. Assuming monomer 0."))
     # Create Lattice Object
     latticeParams = expandLatticeParameters(param)
     dim = param.dim
