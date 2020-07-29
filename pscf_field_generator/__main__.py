@@ -1,10 +1,17 @@
 # Library imports
-from fieldGeneration.crystal_structs.crystalStructs.lattice import Lattice
-from fieldGeneration.crystal_structs.crystalStructs.crystal import ParticleBase
-from fieldGeneration.fieldGenerators import FieldCalculator
-from fieldGeneration.pscfFileManagers.paramfile import expandLatticeParameters, getInterfaceWidth, getMonomerFractions, ParamFile
-from fieldGeneration.pscfFileManagers.fieldfile import WaveVectFieldFile
-from fieldGeneration.stringTools import str_to_num, wordsGenerator
+from structure import ( Lattice,
+                        ParticleBase,
+                        ScatteringParticle,
+                        POSITION_TOLERANCE )
+#from fieldGeneration.crystal_structs.crystalStructs.lattice import Lattice
+#from fieldGeneration.crystal_structs.crystalStructs.crystal import ParticleBase
+from fieldGenerators import FieldCalculator
+from pscfFileManagers import ( expandLatticeParameters, 
+                                getInterfaceWidth, 
+                                getMonomerFractions, 
+                                ParamFile, 
+                                WaveVectFieldFile )
+from util.stringTools import str_to_num, wordsGenerator
 
 # Standard Library Imports
 import argparse
@@ -54,7 +61,7 @@ def generate_field_file(param, calculator, kgridFileName, kgrid=None):
     
 
 if __name__=="__main__":
-    ParticleBase.POSITION_TOLERANCE = 0.001
+    POSITION_TOLERANCE = 0.001
     # Get command file from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--file","-f", type=str, required=True)

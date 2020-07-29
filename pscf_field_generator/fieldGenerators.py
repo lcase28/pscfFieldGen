@@ -1,37 +1,24 @@
 # Imports
-from .crystal_structs.crystalStructs.lattice import Lattice
-from .crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
-from .crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
-from .crystal_structs.crystalStructs.space_groups import SpaceGroup
-from fieldGeneration.particleForms import ParticleForm, SphereForm, Circle2DForm
+from structure import ( Lattice, 
+                        CrystalBase, 
+                        CrystalMotif, 
+                        buildCrystal, 
+                        SphereForm, 
+                        Circle2DForm, 
+                        SpaceGroup )
+#from .crystal_structs.crystalStructs.lattice import Lattice
+#from .crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
+#from .crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
+#from .crystal_structs.crystalStructs.space_groups import SpaceGroup
+#from fieldGeneration.particleForms import ParticleForm, SphereForm, Circle2DForm
+from util.stringTools import str_to_num, wordsGenerator
+
 import numpy as np
 import scipy as sp
-from fieldGeneration.stringTools import str_to_num, wordsGenerator
 import pathlib
 import itertools
 import re
 from enum import Enum
-
-class ScatteringParticle(ParticleBase):
-    """ Particle with associated Form Factor. """
-    def __init__(self, position, formFactor):
-        self._formFactor = formFactor
-        super().__init__("Micelle", position)
-    
-    def formFactorAmplitude(qnorm, vol, smear):
-        return self._formFactor.formFactorAmplitude(qnorm, vol, smear)
-
-
-def buildCrystal(style, N_particles, positions, formFactor, lattice, space_group=None):
-    initSet = ParticleSet()
-    for i in range(N_particles):
-        p = ScatteringParticle(positions[i,:], formFactor)
-        initSet.addParticle(p)
-    if style == "basis":
-        return CrystalBase(lattice, initSet)
-    else:
-        return CrystalMotif(space_group, initSet, lattice)
-    
 
 class FieldCalculator(object):
     """ Generator class for 3D k-grid density fields of n-monomer systems """

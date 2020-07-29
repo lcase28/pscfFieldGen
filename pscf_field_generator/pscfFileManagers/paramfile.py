@@ -4,6 +4,8 @@ import numpy as np
 import string
 import sys
 
+__all__ = [ "expandLatticeParameters", "getInterfaceWidth", "getMonomerFractions", "ParamFile" ]
+
 def expandLatticeParameters(param):
     """ From the parameter file, get the full set of lattice parameters. """
     if param.dim == 1:

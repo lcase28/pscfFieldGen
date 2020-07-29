@@ -4,6 +4,8 @@ from .paramfile import ParamFile
 import string 
 import sys
 
+__all__ = [ "OutFile" ]
+
 class OutFile(ParamFile):
     """
     Hold the data in a PSCF output summary file.
