@@ -381,7 +381,10 @@ class Lattice(object):
     ## "Private" internal methods
     
     def __repr__(self):
-        s = "< Lattice object with parameters {:.3f}A, {:.3f}, {:.3f}, {:.3f}, {:.3f} >"
+        if self.dim == 3:
+            s = "< 3D Lattice with parameters {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f}, {:.3f} >"
+        else:
+            s = "< 2D Lattice with parameters {:.3f}, {:.3f}, {:.3f} >"
         return s.format(*self.latticeParameters)
     
     def __hash__(self):
