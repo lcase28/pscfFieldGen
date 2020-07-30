@@ -1,0 +1,14 @@
+parameter_file      param_kgrid
+output_file         rho_kgrid
+
+core_monomer        0
+
+coord_input_style   motif
+N_particles         5
+particle_positions   
+    0.0000  0.0000  0.0000
+    0.3981  0.3981  0.0000
+    0.4632  0.1316  0.0000
+    0.7376  0.0653  0.0000
+    0.1823  0.1823  0.2524
+    

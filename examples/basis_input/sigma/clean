@@ -1,0 +1,15 @@
+KGRIDFILE=./rho_kgrid
+RGRIDFILE=./rho_rgrid
+CONVLOGFILE=./conversionLog
+
+if [ -f "$KGRIDFILE" ]; then
+    rm "$KGRIDFILE"
+fi
+
+if [ -f "$RGRIDFILE" ]; then
+    rm "$RGRIDFILE"
+fi
+
+if [ -f "$CONVLOGFILE" ]; then
+    rm "$CONVLOGFILE"
+fi

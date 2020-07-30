@@ -22,6 +22,9 @@ the Fortran version of the software are supported. Despite this, the program can
 generate initial guesses for use with the C++/Cuda version. 
 See the section **Use With C++/Cuda Versions** for special instructions on doing so.
 
+Example files for a range of calculations are included in the `examples` directory in
+the root of the project repository.
+
 ### Model File
 
 The Model file acts as the primary input for the program. Data in this file is specified
@@ -88,14 +91,62 @@ Support for the C++/Cuda parameter files will be added, but is not yet available
 However, because the field file format used by the C++/Cuda version of the software
 matches that used in the Fortran version, this generator can still be used.
 
-In order to do so, system data must be formatted into a PSCF Fortran parameter file.
+In order to do so, system data must be formatted into a PSCF Fortran-style parameter file.
 Most data can be ported directly between the two formats, taking care to follow the
 differing formats (such as the organization of `chi` interactions),
 punctuation (such as placement of single quotes around string data in the Fortran format),
 and keyword labels (such as `mesh` vs `ngrid` for the spatial discretization).
-Two sections will require special attention, however.
 
-The first and simplest of these is treatment of the `groupName` entry.
+**Three entries will require special attention:**
+
+The first of these is treatment of the unit cell's crystal system identifier.
+The Fortran version's parameter file expects the `crystal_system` to be enclosed in
+single quotes, while C++/Cuda version does not. When using this tool for a C++/Cuda
+calculation, exclude the quotation marks in the Fortran-style parameter file. Thus,
+if the C++/Cuda parameter file contains
+
+```
+...
+    unitCell    cubic   1.9
+...
+```
+
+a proper PSCF Fortran parameter file would contain
+
+```
+...
+UNIT_CELL
+dim
+            2
+crystal_system
+            'cubic'
+N_cell_param
+            1
+cell_param
+            1.9
+...
+``` 
+
+but the Fortran-style parameter file used for this tool would contain
+
+```
+...
+UNIT_CELL
+dim
+            2
+crystal_system
+            cubic
+N_cell_param
+            1
+cell_param
+            1.9
+...
+``` 
+
+in order to yield the proper kgrid file. Note the lack of single quotes
+around the crystal system.
+
+The second of these is treatment of the `groupName` entry.
 The `groupName` (`group_name` in the Fortran file) identifies the space group of the
 system. The key difference between the Fortran and C++/Cuda versions is that, while 
 Fortran group names contain spaces between distinct symbols, while the C++/Cuda names
@@ -110,17 +161,7 @@ For example, if the C++/Cuda parameter file contains
 ...
 ```
 
-the Fortran-style parameter file should contain
-
-```
-...
-BASIS
-group_name
-           I_m_-3_m
-...
-```
-
-and **not** the Fortran version's proper
+a proper PSCF Fortran parameter file would contain
 
 ```
 ...
@@ -130,11 +171,26 @@ group_name
 ...
 ```
 
+but the Fortran-style parameter file for this tool should instead contain
 
-as one might initially expect. This subtle difference ensures that the user will not
-need to change their field file after generation.
+```
+...
+BASIS
+group_name
+           I_m_-3_m
+...
+```
 
-The second change is to the Polymer chain data. The C++/Cuda code is able to handle
+
+in order to ensure the proper kgrid file format. Note, again, the lack of 
+single quotes, and the updated string format.
+
+Please not that the changes just described for the `crystal_system` and `group_name`
+entries are only required to make the kgrid file usable
+in C++/Cuda calculations as generated. If the user prefers, they can follow the original
+PSCF Fortran conventions for these entries and correct the kgrid file after generation.
+
+The last change relates to the Polymer chain data. The C++/Cuda code is able to handle
 branched polymer architectures which are not supported in the Fortran software, meaning
 that the polymer chain structure may not be able to be directly translated. The easiest
 approach to correcting this is to simply linearize the branched polymer. That is to say,
@@ -142,7 +198,7 @@ take the blocks in the order specified in the C++/Cuda parameter file, and treat
 laying sequentially along a linear multiblock polymer. In this tool, the polymer structure
 is only used to determine the overall volume fraction of each monomer species. Once the
 volume fractions are calculated, the difference between a linear and branched polymer
-is inconsequential in the field generation algorithm.
+is inconsequential in this field generation algorithm.
 As an example, if a polymer in the system has 4 branches emanating from one vertex,
 the C++/Cuda parameter file might contain
 
@@ -179,6 +235,6 @@ block_length
 in order to generate the proper overall volume fractions.
 
 Once the field file is generated, the C++/Cuda version of PSCF will be able to convert
-the kgrid format into the required rgrid or basis formats required for the calculations.
+the kgrid format into the rgrid or basis formats required for the calculations.
 
 

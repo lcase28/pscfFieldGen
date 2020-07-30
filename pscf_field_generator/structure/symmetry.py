@@ -1,6 +1,6 @@
 """ Module defining class to hold symmetry operation data """
 
-from .core import POSITION_TOLERANCE
+from pscf_field_generator.structure.core import POSITION_TOLERANCE
 
 from copy import deepcopy
 import enum
@@ -1622,13 +1622,13 @@ class SpaceGroup(object):
             The name of the space group.
             See PSCF user manual (https://pscf.readthedocs.io/en/latest/#) for name formatting.
         """
-        try:
-            generators, originData, countData = getGeneratorSet(dim, crystal_system, group_name)
-        except(ValueError):
-            raise(ValueError("Unable to find definition for dim={}, crystal_system={!r}, group_name={!r}".format(dim, crystal_system, group_name)))
         self._dim = dim
         self._crystal_system = crystal_system.strip("'")
         self._group_name = group_name.strip("'")
+        try:
+            generators, originData, countData = getGeneratorSet(dim, self._crystal_system, self._group_name)
+        except(ValueError):
+            raise(ValueError("Unable to find definition for dim={}, crystal_system={!r}, group_name={!r}".format(dim, self._crystal_system, self._group_name)))
         self._basic_generators = generators
         self._unit_translations = SymmetryOperation.getUnitTranslations(dim)
         self._generators = [*self._unit_translations, *self._basic_generators]

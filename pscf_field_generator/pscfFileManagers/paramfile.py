@@ -12,51 +12,58 @@ def expandLatticeParameters(param):
         return {"a":param.cell_param[0]}
     if param.dim == 2:
         # 2D cases
-        if param.crystal_system == 'square':
+        crystalSys = param.crystal_system.strip("'")
+        if crystalSys == 'square':
             a = param.cell_param[0]
             return {"a":a, "b":a, "gamma":90}
-        if param.crystal_system == 'hexagonal':
+        if crystalSys == 'hexagonal':
             a = param.cell_param[0]
             return {"a":a, "b":a, "gamma":120}
-        if param.crystal_system == 'rectangular':
+        if crystalSys == 'rectangular':
             a = param.cell_param[0]
             b = param.cell_param[1]
             return {"a":a, "b":b, "gamma":90}
-        if param.crystal_system == 'oblique':
+        if crystalSys == 'oblique':
             return dict(zip(["a","b","gamma"],param.cell_param))
     if param.dim == 3:
         keys = ["a","b","c","alpha","beta","gamma"]
-        crys = param.crystal_system
+        crys = param.crystal_system.strip("'")
         cp = param.cell_param
         if crys == 'cubic':
             a = cp[0]
             vals = [a, a, a, 90, 90, 90]
+            return dict(zip(keys,vals))
         if crys == 'tetragonal':
             a = cp[0]
             c = cp[1]
             vals = [a, a, c, 90, 90, 90]
+            return dict(zip(keys,vals))
         if crys == 'orthorhombic':
             a = cp[0]
             b = cp[1]
             c = cp[2]
             vals = [a, b, c, 90, 90, 90]
+            return dict(zip(keys,vals))
         if crys == 'monoclinic':
             a = cp[0]
             b = cp[1]
             c = cp[2]
             beta = cp[3]
             vals = [a, b, c, 90, beta, 90]
+            return dict(zip(keys,vals))
         if crys == 'hexagonal':
             a = cp[0]
             c = cp[1]
             vals = [a, a, c, 90, 90, 120]
+            return dict(zip(keys,vals))
         if crys == 'trigonal':
             a = cp[0]
             alpha = cp[1]
             vals = [a, a, a, alpha, alpha, alpha]
+            return dict(zip(keys,vals))
         if crys == 'triclinic':
             vals = cp
-        return dict(zip(keys,vals))
+            return dict(zip(keys,vals))
 
 def getInterfaceWidth(param,monomer_index=0):
     """
