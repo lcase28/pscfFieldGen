@@ -18,7 +18,9 @@ Running the software requires 2 files:
 
 In order to simplify input for the user, crystallographic and composition information
 are taken from a PSCF parameter file. Presently, only parameter files consistent with
-the Fortran version of the software are supported.
+the Fortran version of the software are supported. Despite this, the program can still
+generate initial guesses for use with the C++/Cuda version. 
+See the section **Use With C++/Cuda Versions** for special instructions on doing so.
 
 ### Model File
 
@@ -102,19 +104,32 @@ the Fortran-style parameter file, one should use the C++/Cuda group name string 
 same location as the Fortran group name string.
 For example, if the C++/Cuda parameter file contains
 
->   `groupName      I_m_-3_m`
+```
+...
+    groupName      I_m_-3_m
+...
+```
 
 the Fortran-style parameter file should contain
 
->   `BASIS`
->   `group_name`
->   `           I_m_-3_m`
+```
+...
+BASIS
+group_name
+           I_m_-3_m
+...
+```
 
 and **not** the Fortran version's proper
 
->   `BASIS`
->   `group_name`
->   `           'I m -3 m'`
+```
+...
+BASIS
+group_name
+           'I m -3 m'
+...
+```
+
 
 as one might initially expect. This subtle difference ensures that the user will not
 need to change their field file after generation.
@@ -131,27 +146,35 @@ is inconsequential in the field generation algorithm.
 As an example, if a polymer in the system has 4 branches emanating from one vertex,
 the C++/Cuda parameter file might contain
 
->   `   Polymer{                    `
->   `       nBlock  4               `
->   `       nVertex 5               `
->   `       blocks  0  0  0  1  0.30`
->   `               1  1  1  2  0.30`
->   `               2  0  1  3  0.20`
->   `               3  1  1  4  0.20`
->   `       phi     1.0             `
->   `   }                           `
+```
+...
+   Polymer{                    
+       nBlock  4               
+       nVertex 5               
+       blocks  0  0  0  1  0.30
+               1  1  1  2  0.30
+               2  0  1  3  0.20
+               3  1  1  4  0.20
+       phi     1.0             
+   }                           
+...
+```
 
 in which case the Fortran-style parameter file would contain
 
->   `CHAINS                                     `
->   `N_chain                                    `
->   `               1                           `
->   `N_block                                    `
->   `               4                           `
->   `block_monomer                              `
->   `               1       2       1       2   `
->   `block_length                               `
->   `               0.30    0.30    0.20    0.20`
+```
+...
+CHAINS                                     
+N_chain                                    
+               1                           
+N_block                                    
+               4                           
+block_monomer                              
+               1       2       1       2   
+block_length                               
+               0.30    0.30    0.20    0.20
+...
+```
 
 in order to generate the proper overall volume fractions.
 
