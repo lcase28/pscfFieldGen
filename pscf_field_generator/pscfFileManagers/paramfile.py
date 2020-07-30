@@ -80,7 +80,7 @@ def getInterfaceWidth(param,monomer_index=0):
     mean of all chi parameters involving the core monomer.
     """
     nMon = param.N_monomer
-    if monomer_index >= nMon or monomer_index <= 0:
+    if monomer_index >= nMon or monomer_index < 0:
         raise(ValueError("Invalid Monomer index ({}) given. Must be in range (0,{}).".format(monomer_index, nMon-1)))
     segLen = np.array(param.kuhn)
     b = (1.0 * np.prod(segLen)) ** (1.0/len(segLen))

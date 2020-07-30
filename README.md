@@ -18,7 +18,9 @@ Running the software requires 2 files:
 
 In order to simplify input for the user, crystallographic and composition information
 are taken from a PSCF parameter file. Presently, only parameter files consistent with
-the Fortran version of the software are supported.
+the Fortran version of the software are supported. Despite this, the program can still
+generate initial guesses for use with the C++/Cuda version. 
+See the section **Use With C++/Cuda Versions** for special instructions on doing so.
 
 ### Model File
 
@@ -87,3 +89,96 @@ However, because the field file format used by the C++/Cuda version of the softw
 matches that used in the Fortran version, this generator can still be used.
 
 In order to do so, system data must be formatted into a PSCF Fortran parameter file.
+Most data can be ported directly between the two formats, taking care to follow the
+differing formats (such as the organization of `chi` interactions),
+punctuation (such as placement of single quotes around string data in the Fortran format),
+and keyword labels (such as `mesh` vs `ngrid` for the spatial discretization).
+Two sections will require special attention, however.
+
+The first and simplest of these is treatment of the `groupName` entry.
+The `groupName` (`group_name` in the Fortran file) identifies the space group of the
+system. The key difference between the Fortran and C++/Cuda versions is that, while 
+Fortran group names contain spaces between distinct symbols, while the C++/Cuda names
+separate distinct symbols with underbars. To accommodate this distinction, when generating
+the Fortran-style parameter file, one should use the C++/Cuda group name string in the
+same location as the Fortran group name string.
+For example, if the C++/Cuda parameter file contains
+
+```
+...
+    groupName      I_m_-3_m
+...
+```
+
+the Fortran-style parameter file should contain
+
+```
+...
+BASIS
+group_name
+           I_m_-3_m
+...
+```
+
+and **not** the Fortran version's proper
+
+```
+...
+BASIS
+group_name
+           'I m -3 m'
+...
+```
+
+
+as one might initially expect. This subtle difference ensures that the user will not
+need to change their field file after generation.
+
+The second change is to the Polymer chain data. The C++/Cuda code is able to handle
+branched polymer architectures which are not supported in the Fortran software, meaning
+that the polymer chain structure may not be able to be directly translated. The easiest
+approach to correcting this is to simply linearize the branched polymer. That is to say,
+take the blocks in the order specified in the C++/Cuda parameter file, and treat them as
+laying sequentially along a linear multiblock polymer. In this tool, the polymer structure
+is only used to determine the overall volume fraction of each monomer species. Once the
+volume fractions are calculated, the difference between a linear and branched polymer
+is inconsequential in the field generation algorithm.
+As an example, if a polymer in the system has 4 branches emanating from one vertex,
+the C++/Cuda parameter file might contain
+
+```
+...
+   Polymer{                    
+       nBlock  4               
+       nVertex 5               
+       blocks  0  0  0  1  0.30
+               1  1  1  2  0.30
+               2  0  1  3  0.20
+               3  1  1  4  0.20
+       phi     1.0             
+   }                           
+...
+```
+
+in which case the Fortran-style parameter file would contain
+
+```
+...
+CHAINS                                     
+N_chain                                    
+               1                           
+N_block                                    
+               4                           
+block_monomer                              
+               1       2       1       2   
+block_length                               
+               0.30    0.30    0.20    0.20
+...
+```
+
+in order to generate the proper overall volume fractions.
+
+Once the field file is generated, the C++/Cuda version of PSCF will be able to convert
+the kgrid format into the required rgrid or basis formats required for the calculations.
+
+
