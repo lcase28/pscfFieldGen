@@ -457,9 +457,9 @@ class ParamFile(object):
         """ Analog of subroutine input_interaction in chemistry_mod.f """
         self.interaction_type = self._input_var('char')
         N_monomer = self.N_monomer
-        if self.interaction_type == 'chi':
+        if self.interaction_type == "'chi'":
             self.chi = self._input_mat('real',N_monomer,N_monomer,s='L')
-        elif self.interaction_type == 'chi_T':
+        elif self.interaction_type == "'chi_T'":
             self.chi_A = self._input_mat('real',N_monomer,N_monomer,s='L')
             self.chi_B = self._input_mat('real',N_monomer,N_monomer,s='L')
             self.Temperature = self._input_var('real')
