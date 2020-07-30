@@ -1627,8 +1627,8 @@ class SpaceGroup(object):
         except(ValueError):
             raise(ValueError("Unable to find definition for dim={}, crystal_system={!r}, group_name={!r}".format(dim, crystal_system, group_name)))
         self._dim = dim
-        self._crystal_system = crystal_system
-        self._group_name = group_name
+        self._crystal_system = crystal_system.strip("'")
+        self._group_name = group_name.strip("'")
         self._basic_generators = generators
         self._unit_translations = SymmetryOperation.getUnitTranslations(dim)
         self._generators = [*self._unit_translations, *self._basic_generators]
