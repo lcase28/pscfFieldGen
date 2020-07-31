@@ -269,4 +269,16 @@ in order to generate the proper overall volume fractions.
 Once the field file is generated, the C++/Cuda version of PSCF will be able to convert
 the kgrid format into the rgrid or basis formats required for the calculations.
 
+## Special Notes
 
+**Input particle positions should be precise to at least 4 decimal places:**
+When generating the unit cell structure, particle positions are considered
+identical when all components of fractional coordinate position differ by less
+than 0.001. If multiple symmetry operation sequences yield a position that has
+been seen before (or after consecutive applications of the same operation yield the
+original position) the new position is rejected to avoid duplicates. For precise
+coordinates (such as 0.0, 0.25, or 0.5), this will not cause a problem; the imprecision
+from truncated values (such as 0.3333, or 0.6667) will cascade through symmetry operations
+resulting in some error in the resultant positions. When values are truncated above
+the positional tolerance, duplicate particles can be missed. _User control of 
+this tolerance can later be added_.
