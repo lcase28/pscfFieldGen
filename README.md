@@ -5,6 +5,38 @@ A tool to generate PSCF initial guess files for spherical or cylindrical morphol
 **NOTE:** This is a beta release. See Notes section at the bottom of this file for special
 assumptions made in its operation.
 
+## Requirements
+
+**Use of this tool requires Python 3.4 or later** as it makes use of some of the newer additions
+to the standard library.
+This tool has been developed using the Anaconda distribution of Python 3.7 on MacOS, Ubuntu Linux,
+and Unix. Because of this, **Python 3.7 is the minimum recommended version**; earlier versions
+may encounter unanticipated issues with back-compatibility.
+
+The following required modules should be included in most Python distributions
+(Version 3.4 or later) as part of the standard library, and should not require
+additional installation. They should, however, be available in the active
+python environment.
+
+ * abc
+ * argparse
+ * copy
+ * enum
+ * itertools
+ * pathlib
+ * re
+ * string
+ * sys
+
+In addition, the following libraries are also required:
+
+ * Numpy
+ * Scipy
+ * Sympy
+
+All three of these libraries are included standard with Anaconda Python. For installation
+instructions for other Python distributions, see the project sites for these packages.
+
 ## Installation
 
 Add installation instructions.
