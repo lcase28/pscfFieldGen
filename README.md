@@ -1,6 +1,6 @@
-# pscf_field_generator
+# PSCF Particle Phase Field Generator
 
-A tool to generate PSCF initial guess files for spherical or cylindrical morphologies.
+A tool to generate PSCF initial guess files 3D or 2D "particle" morphologies.
 
 **NOTE:** This is a beta release. See Notes section at the bottom of this file for special
 assumptions made in its operation.
@@ -39,7 +39,85 @@ instructions for other Python distributions, see the project sites for these pac
 
 ## Installation
 
-Add installation instructions.
+### Obtaining Source Code
+
+The source code for the tool is hosted on Github. The easiest way to obtain the code is
+with a git version control client. If such a client is installed on your computer,
+first `cd` into the directory in which you want to place the pscfFieldGen root
+directory. From there, the command
+
+```
+> git clone [url]
+```
+
+will create a complete working copy of the source code in a
+subdirectory called `pscfFieldGen/`. Users without a git client can download a 
+`.zip` folder from the Github website and extract its contents into an
+analogous folder.
+
+### Modifying Search Paths
+
+To allow the operating system and python interpreter to find the pscfFieldGen program, 
+you will have to make some modifications to environment variables.
+
+#### Adding to PYTHONPATH
+
+Many python installations make use of the environment variable PYTHONPATH when searching
+for modules. To add pscfFieldGen to this search path, use the following command
+
+```
+>  PYTHONPATH=$PYTHONPATH:/path/to/root/pscfFieldGen
+```
+
+Executing this on the command line only modifies the path until the end of the terminal
+session. To make the change permanent, add the above command to the file ~/.bashrc (on linux)
+or to ~/.profile (on Mac OS).
+
+#### Anaconda Python
+
+With Anaconda Python and other conda-managed environments, changes to the PYTHONPATH
+environment variable often are not reflected in the python interpreter's effective
+path. Instead, one must add pscfFieldGen to the environment's site-packages.
+If you use multiple environments, activate the one you wish to install to with
+`conda activate` before proceeding.
+
+The easiest way to add the tool to site-packages, is using the conda-develop command
+included in the conda-build package. Install this package using 
+
+```
+> conda install conda-build
+```
+
+When that installation completes, enter the following command
+
+```
+> conda-develop /path/to/root/pscfFieldGen
+```
+
+where "/path/to/root/" represents the absolute path to the directory from which you cloned
+the git repository, as that folder should then contain the pscfFieldGen/ subdirectory.
+This will create a file called 'conda.pth' in the environment's site-packages which will
+contain the path you gave in the last command.
+
+You can also complete this step manually. To do so, first navigate to your environment's 
+site-packages directory. For Anaconda's base environment, this is located at 
+
+```
+/path/to/anaconda/lib/pythonX.X/site-packages
+```
+
+where "/path/to/anaconda" is the path to anaconda's installation directory (commonly
+~/anaconda3 or similar), and "X.X" represents your Python version. Other environments 
+would be found at
+
+```
+/path/to/anaconda/envs/{NAME_OF_ENVIRONMENT}/lib/pythonX.X/site-packages
+```
+
+Once in the site-packages directory, create a `.pth` file containing the path to pscfFieldGen.
+This file can be named anything, as long as it ends with `.pth`. A name such as "pscfFieldGen.pth"
+is one possibility.
+
 
 ## Running the tool.
 
