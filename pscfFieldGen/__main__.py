@@ -91,24 +91,30 @@ if __name__=="__main__":
         words = wordsGenerator(cmdFile)
         for word in words:
             if word == 'parameter_file':
-                param = ParamFile(next(words))
+                filename = next(words)
+                param = ParamFile(filename)
                 hasParam = True
+                data = filename
             elif word == 'coord_input_style':
                 input_style = next(words)
                 if input_style == 'motif' or input_style == 'basis':
                     hasStyle = True
+                    data = input_style
                 else:
                     raise(ValueError("Invalid option, {}, given for coord_input_style".format(input_style)))
             elif word == 'core_monomer':
                 core_monomer = int(next(words))
                 if core_monomer >= 0:
                     hasCore = True
+                    data = core_monomer
                 else:
                     raise(ValueError("core_monomer must be a non-negative integer. Given {}.".format(core_monomer)))
             elif word == 'N_particles':
                 nparticle = str_to_num(next(words))
                 if nparticle <= 0:
                     raise(ValueError("Invalid N_particles given ({}). Must be >= 1.".format(nparticle)))
+                else:
+                    data = nparticle
             elif word == 'particle_positions':
                 if nparticle <= 0:
                     raise(ValueError("N_particles must be specified before particle_positions"))
@@ -118,16 +124,22 @@ if __name__=="__main__":
                     numData = param.dim * nparticle
                     positionList = np.array( [str_to_num(next(words)) for i in range(numData)] )
                     partPositions = np.reshape(positionList, (nparticle, param.dim))
+                    data = partPositions
                     hasPositions = True
             elif word == 'output_file':
                 outfilestring = next(words)
                 outFile = Path(outfilestring)
+                data = outFile
                 hasOutFile = True
             elif word == 'finish':
                 #do nothing
+                data = ''
                 doneFlag = True
             else:
                 raise(NotImplementedError("No operation has been set for keyword {}.".format(word)))
+            # if trace requested, echo input file as read
+            if args.trace:
+                print('{}\n\t\t{}'.format(word, data))
     
     # Check for presence of required data
     if not hasParam:
@@ -144,11 +156,19 @@ if __name__=="__main__":
         warnings.warn(RuntimeWarning("Output file name not specified with keyword 'output_file'. Using 'rho_kgrid'."))
     if not hasCore:
         warnings.warn(RuntimeWarning("core_monomer not specified. Assuming monomer 0."))
+    
     # Create Lattice Object
+    if args.trace:
+        print("\nCreating System Lattice")
     latticeParams = expandLatticeParameters(param)
     dim = param.dim
     lattice = Lattice.latticeFromParameters(dim, **latticeParams)
+    if args.trace:
+        print("\t\t{}".format(lattice))
+    
     # Create Crystal Object
+    if args.trace:
+        print("\nCreating Crystal\n")
     groupname = param.group_name
     crystalsystem = param.crystal_system
     crystal = buildCrystal( input_style, 
@@ -157,19 +177,19 @@ if __name__=="__main__":
                             lattice, 
                             group_name=groupname,
                             crystal_system=crystalsystem )
-    # Create Calculator Object
-    calculator = FieldCalculator(crystal)
-    #calculator = FieldCalculator(dim = dim, \
-    #                            lattice = lattice, \
-    #                            N_particles = nparticle, \
-    #                            particlePositions = partPositions, \
-    #                            coord_input_style = input_style, \
-    #                            systemName = crystal_system, \
-    #                            groupName = group_name)
     if args.trace:
+        print("Crystal being generated:")
         print(crystal.longString)
+    # Create Calculator Object
+    if args.trace:
+        print("\nSetting Up Calculator")
+    calculator = FieldCalculator(crystal)
     # Generate File
+    if args.trace:
+        print("\nGenerating Field File")
     generate_field_file(param, calculator, outFile)
+    if args.trace:
+        print("\nField Generation Complete")
             
             
             

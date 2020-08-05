@@ -46,7 +46,7 @@ class CrystalBase(object):
     @property
     def longString(self):
         """ Output string containing detailed data about crystal """
-        out = "{}\n{}".format(self, self._basis.particleList())
+        out = "{}\nAll {}".format(self, self._basis.particleList())
         return out
     
 
@@ -88,6 +88,13 @@ class CrystalMotif(CrystalBase):
         formstr += ", space group = {}".format(self._space_group)
         return formstr
     
+    @property
+    def longString(self):
+        """ Output string containing detailed data about crystal """
+        buildstr = super().longString
+        buildstr += "\nFrom Motif {}".format(self._motif.particleList())
+        return buildstr
+        
 
 def buildCrystal(style, N_particles, positions, lattice, **kwargs):
     """
