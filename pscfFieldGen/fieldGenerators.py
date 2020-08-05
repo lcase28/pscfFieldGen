@@ -2,9 +2,6 @@
 from pscfFieldGen.structure import ( Lattice, 
                                     CrystalBase, 
                                     CrystalMotif, 
-                                    buildCrystal, 
-                                    SphereForm, 
-                                    Circle2DForm, 
                                     SpaceGroup )
 from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
@@ -64,47 +61,17 @@ class FieldCalculator(object):
         """
         Initialize a new FieldGenerator.
         
-        Keyword Parameters
-        ------------------
-        dim : integer
-            Dimensionality of the system (1-3)
-        formfactor : ParticleForm
-            Object capable of returning the particle form factor.
-        lattice : Lattice object
-            Object representing the basis vectors of the lattice
-        N_particle : integer
-            Number of particles in the system
-        particlePositions : array-like, N_particles by dim
-            Positions of particles in coordinates of the basis vectors.
-        coord_input_style : string
-            Either 'basis' or 'motif'
-        systemName : string
-            The crystal system.
-        groupName : string
-            The name of the space group.
+        Parameters
+        ----------
+        crystal : pscfFieldGen.structure.CrystalBase or CrystalMotif
+            The crystal structure the calculator is supposed to produce
+            fields for.
         """
         self.crystal = crystal
         self.dim = self.crystal.dim
         self.lattice = self.crystal.lattice
         self.reciprocal_lattice = self.lattice.reciprocal
         self.partForm = self.crystal.particles[0].formFactor
-        
-        #self.dim = kwargs.get("dim", 3)
-        #self.lattice = kwargs.get("lattice", \
-        #    Lattice.latticeFromParameters(dim = self.dim, **self.__defaultParams))
-        #self.reciprocal_lattice = self.lattice.reciprocal
-        #crystalStyle = kwargs.get("coord_input_style", "motif")
-        #groupName = kwargs.get("groupName")
-        #crystal_system = kwargs.get("systemName")
-        #group = SpaceGroup(self.dim, crystal_system, groupName)
-        #particles = kwargs.get("particlePositions",None)
-        #nparticles = kwargs.get("N_particles")
-        #if self.dim == 3:
-        #    defPartForm = SphereForm
-        #elif self.dim == 2:
-        #    defPartForm = Circle2DForm
-        #self.partForm = kwargs.get("formfactor", defPartForm)
-        #self.crystal = buildCrystal(crystalStyle,nparticles, particles,self.partForm,self.lattice,group)
         self.nparticles = self.crystal.n_particles
         self.smear = kwargs.get("sigma_smear", 0.0)
         # Cache pre-calculated results which can be recycled whenever ngrid is same

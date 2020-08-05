@@ -1,6 +1,7 @@
 # PSCF Particle Phase Field Generator
 
-A tool to generate PSCF initial guess files 3D or 2D "particle" morphologies.
+A tool to generate PSCF initial guess files for bulk morphologies involving assemblies of
+3D spherical or 2D cylindrical particles.
 
 **NOTE:** This is a beta release. See Notes section at the bottom of this file for special
 assumptions made in its operation.
@@ -153,6 +154,18 @@ using the command
 In the above command, the -m flag tells the python interpreter to look for the module's
 `__main__.py` script. The -f flag tells the program that the model file is about to be
 specified, and 'model_file' represents the name of your model file.
+
+pscfFieldGen can also be called with a -t or --trace flag to print a detailed trace of 
+the software execution to the terminal. 
+This would echo the data read from the model file, as well as
+the Lattice, and crystal structure details.
+In order to redirect this trace to a file, the command can be executed as:
+
+```
+> python -m pscfFieldGen -f model_file -t > trace_file
+```
+
+where "trace_file" is the name of the file storing the trace data.
 
 Example files for a range of calculations are included in the `examples` directory in
 the root of the project repository.
