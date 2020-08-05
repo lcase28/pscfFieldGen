@@ -1,17 +1,12 @@
 # Imports
-from pscf_field_generator.structure import ( Lattice, 
-                        CrystalBase, 
-                        CrystalMotif, 
-                        buildCrystal, 
-                        SphereForm, 
-                        Circle2DForm, 
-                        SpaceGroup )
-#from .crystal_structs.crystalStructs.lattice import Lattice
-#from .crystal_structs.crystalStructs.crystal import ParticleBase, ParticleSet
-#from .crystal_structs.crystalStructs.crystal import CrystalBase, CrystalMotif
-#from .crystal_structs.crystalStructs.space_groups import SpaceGroup
-#from fieldGeneration.particleForms import ParticleForm, SphereForm, Circle2DForm
-from pscf_field_generator.util.stringTools import str_to_num, wordsGenerator
+from pscfFieldGen.structure import ( Lattice, 
+                                    CrystalBase, 
+                                    CrystalMotif, 
+                                    buildCrystal, 
+                                    SphereForm, 
+                                    Circle2DForm, 
+                                    SpaceGroup )
+from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
 import numpy as np
 import scipy as sp

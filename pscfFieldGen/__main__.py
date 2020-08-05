@@ -1,17 +1,17 @@
 # Library imports
-from pscf_field_generator.structure import ( Lattice,
+from pscfFieldGen.structure import ( Lattice,
                         ParticleBase,
                         ScatteringParticle,
                         POSITION_TOLERANCE )
 #from fieldGeneration.crystal_structs.crystalStructs.lattice import Lattice
 #from fieldGeneration.crystal_structs.crystalStructs.crystal import ParticleBase
-from pscf_field_generator.fieldGenerators import FieldCalculator
-from pscf_field_generator.pscfFileManagers import ( expandLatticeParameters, 
-                                getInterfaceWidth, 
-                                getMonomerFractions, 
-                                ParamFile, 
-                                WaveVectFieldFile )
-from pscf_field_generator.util.stringTools import str_to_num, wordsGenerator
+from pscfFieldGen.fieldGenerators import FieldCalculator
+from pscfFieldGen.pscfFileManagers import ( expandLatticeParameters, 
+                                            getInterfaceWidth, 
+                                            getMonomerFractions, 
+                                            ParamFile, 
+                                            WaveVectFieldFile )
+from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
 # Standard Library Imports
 import argparse

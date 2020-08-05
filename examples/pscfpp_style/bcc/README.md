@@ -13,7 +13,7 @@ or use the following three commands
 
 ```
 ./clean
-python -m pscf_field_generator -f model
+python -m pscfFieldGen -f model
 pscf_pc3d -e -p param -c command
 ```
 
@@ -31,7 +31,7 @@ or use the following three commands
 
 ```
 ./clean
-python -m pscf_field_generator -f model
+python -m pscfFieldGenerator -f model
 pscf_pc3d -e -p param -c command_long
 ```
 

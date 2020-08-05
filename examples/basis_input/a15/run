@@ -1,2 +1,2 @@
-python -m pscf_field_generator -f model
+python -m pscfFieldGen -f model
 pscf < param_kgrid > conversionLog

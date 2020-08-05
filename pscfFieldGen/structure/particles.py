@@ -2,8 +2,8 @@
 Definition of Particle and Form-Factor classes
 """
 
-from pscf_field_generator.structure.core import POSITION_TOLERANCE
-from pscf_field_generator.structure.lattice import Lattice
+from pscfFieldGen.structure.core import POSITION_TOLERANCE
+from pscfFieldGen.structure.lattice import Lattice
 
 from abc import ABC, abstractmethod
 from copy import deepcopy

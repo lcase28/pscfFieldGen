@@ -1,6 +1,6 @@
 """ Module defining class to hold symmetry operation data """
 
-from pscf_field_generator.structure.core import POSITION_TOLERANCE
+from pscfFieldGen.structure.core import POSITION_TOLERANCE
 
 from copy import deepcopy
 import enum

@@ -78,7 +78,7 @@ or to ~/.profile (on Mac OS).
 With Anaconda Python and other conda-managed environments, changes to the PYTHONPATH
 environment variable often are not reflected in the python interpreter's effective
 path. Instead, one must add pscfFieldGen to the environment's site-packages.
-If you use multiple environments, activate the one you wish to install to with
+If you use multiple environments, activate the one you wish to install to using
 `conda activate` before proceeding.
 
 The easiest way to add the tool to site-packages, is using the conda-develop command
@@ -103,7 +103,7 @@ You can also complete this step manually. To do so, first navigate to your envir
 site-packages directory. For Anaconda's base environment, this is located at 
 
 ```
-/path/to/anaconda/lib/pythonX.X/site-packages
+/path/to/anaconda/lib/pythonX.X/site-packages/
 ```
 
 where "/path/to/anaconda" is the path to anaconda's installation directory (commonly
@@ -111,7 +111,15 @@ where "/path/to/anaconda" is the path to anaconda's installation directory (comm
 would be found at
 
 ```
-/path/to/anaconda/envs/{NAME_OF_ENVIRONMENT}/lib/pythonX.X/site-packages
+/path/to/anaconda/envs/{NAME_OF_ENVIRONMENT}/lib/pythonX.X/site-packages/
+```
+
+Finally, if you have saved an environment outside of the main Anaconda file tree (for example,
+to a user home directory tree on a shared supercomputing system), this would be located instead
+at 
+
+```
+/path/to/environment/lib/pythonX.X/site-packages/
 ```
 
 Once in the site-packages directory, create a `.pth` file containing the path to pscfFieldGen.
@@ -119,7 +127,7 @@ This file can be named anything, as long as it ends with `.pth`. A name such as 
 is one possibility.
 
 
-## Running the tool.
+## Running pscfFieldGen
 
 Running the software requires 2 files:
 
@@ -127,10 +135,24 @@ Running the software requires 2 files:
  * A PSCF Fortran parameter file.
 
 In order to simplify input for the user, crystallographic and composition information
-are taken from a PSCF parameter file. Presently, only parameter files consistent with
+are taken from a PSCF parameter file. 
+Detailed information about the model file is provided in the next subsection.
+Presently, only parameter files consistent with
 the Fortran version of the software are supported. Despite this, the program can still
 generate initial guesses for use with the C++/Cuda version. 
 See the section **Use With C++/Cuda Versions** for special instructions on doing so.
+
+After the tool has been installed, and is discoverable by your Python interpreter,
+and after you have produced the two necessary input files, the program can be run
+using the command
+
+```
+> python -m pscfFieldGen -f model_file
+```
+
+In the above command, the -m flag tells the python interpreter to look for the module's
+`__main__.py` script. The -f flag tells the program that the model file is about to be
+specified, and 'model_file' represents the name of your model file.
 
 Example files for a range of calculations are included in the `examples` directory in
 the root of the project repository.

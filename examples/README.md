@@ -26,7 +26,7 @@ into a log file called `conversionLog`. The same set of calculations can be done
 without the `run` script by executing the following commands on the command line:
 
 ```
-python -m pscf_field_generator -f model
+python -m pscfFieldGen -f model
 pscf < param_kgrid > conversionLog
 ```
 
@@ -94,7 +94,7 @@ file `in/rho_kgrid` and then will use PSCF (C++/Cuda) to convert that to `in/rho
 This is equivallent to entering the following commands manually:
 
 ```
-python -m pscf_field_generator -f model
+python -m pscfFieldGen -f model
 [ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command
 ```
 
@@ -119,7 +119,7 @@ and an RGRID-format density field (`out/rho_rgrid`)
 This execution path is equivallent to entering 
 
 ```
-python -m pscf_field_generator -f model
+python -m pscfFieldGen -f model
 [ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_long
 ```
 

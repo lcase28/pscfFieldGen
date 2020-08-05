@@ -1,8 +1,8 @@
 """ Module containing definitions for building a crystal structure """
 
-from pscf_field_generator.structure.lattice import Lattice
-from pscf_field_generator.structure.symmetry import SpaceGroup
-from pscf_field_generator.structure.particles import ScatteringParticle, ParticleBase, ParticleSet
+from pscfFieldGen.structure.lattice import Lattice
+from pscfFieldGen.structure.symmetry import SpaceGroup
+from pscfFieldGen.structure.particles import ScatteringParticle, ParticleBase, ParticleSet
 
 from copy import deepcopy
 import numpy as np
