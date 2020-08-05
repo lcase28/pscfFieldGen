@@ -60,7 +60,7 @@ class FieldCalculator(object):
                     q = self.qNorm[n]
                     yield (n, b, c, q)
         
-    def __init__(self, **kwargs):
+    def __init__(self, crystal, **kwargs):
         """
         Initialize a new FieldGenerator.
         
@@ -83,22 +83,28 @@ class FieldCalculator(object):
         groupName : string
             The name of the space group.
         """
-        self.dim = kwargs.get("dim", 3)
-        self.lattice = kwargs.get("lattice", \
-            Lattice.latticeFromParameters(dim = self.dim, **self.__defaultParams))
+        self.crystal = crystal
+        self.dim = self.crystal.dim
+        self.lattice = self.crystal.lattice
         self.reciprocal_lattice = self.lattice.reciprocal
-        crystalStyle = kwargs.get("coord_input_style", "motif")
-        groupName = kwargs.get("groupName")
-        crystal_system = kwargs.get("systemName")
-        group = SpaceGroup(self.dim, crystal_system, groupName)
-        particles = kwargs.get("particlePositions",None)
-        nparticles = kwargs.get("N_particles")
-        if self.dim == 3:
-            defPartForm = SphereForm
-        elif self.dim == 2:
-            defPartForm = Circle2DForm
-        self.partForm = kwargs.get("formfactor", defPartForm)
-        self.crystal = buildCrystal(crystalStyle,nparticles, particles,self.partForm,self.lattice,group)
+        self.partForm = self.crystal.particles[0].formFactor
+        
+        #self.dim = kwargs.get("dim", 3)
+        #self.lattice = kwargs.get("lattice", \
+        #    Lattice.latticeFromParameters(dim = self.dim, **self.__defaultParams))
+        #self.reciprocal_lattice = self.lattice.reciprocal
+        #crystalStyle = kwargs.get("coord_input_style", "motif")
+        #groupName = kwargs.get("groupName")
+        #crystal_system = kwargs.get("systemName")
+        #group = SpaceGroup(self.dim, crystal_system, groupName)
+        #particles = kwargs.get("particlePositions",None)
+        #nparticles = kwargs.get("N_particles")
+        #if self.dim == 3:
+        #    defPartForm = SphereForm
+        #elif self.dim == 2:
+        #    defPartForm = Circle2DForm
+        #self.partForm = kwargs.get("formfactor", defPartForm)
+        #self.crystal = buildCrystal(crystalStyle,nparticles, particles,self.partForm,self.lattice,group)
         self.nparticles = self.crystal.n_particles
         self.smear = kwargs.get("sigma_smear", 0.0)
         # Cache pre-calculated results which can be recycled whenever ngrid is same

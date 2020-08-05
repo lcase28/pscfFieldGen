@@ -1591,7 +1591,7 @@ def getGeneratorSet(dim, crystal_system, group_name):
         gen = SymmetryOperation(dim, POINT_SYMMETRY_GENERATORS['inv'])
         generators.append(gen)
     genlist = GENERATOR_SET_REGEX.findall(genliststr)
-    print(genlist)
+    #print(genlist)
     if not len(genlist) == ngen:
         raise(RuntimeError("Error with generator string {}: expected {} generators, got {}.".format(genstring, ngen, len(genlist))))
     for i in range(ngen):
@@ -1692,6 +1692,10 @@ class SpaceGroup(object):
         out = []
         for p in positions:
             out.append(self.evaluatePosition(p,atol))
+    
+    def __str__(self):
+        formstr = "< SpaceGroup object with dim = {}, system = {}, group name = {} >"
+        return formstr.format(self.dim, self.crystalSystem, self.groupName)
     
     def _reached_expected_operations(self):
         if self.symmetryCount == self._expected_symmetry_ops:

@@ -128,6 +128,15 @@ class Circle2DForm(ParticleForm):
         f_smear = np.exp( -(smear**2 * qR**2 / 2.0) )
         return ff, f_smear
 
+def defaultFormFactor(dim):
+    """ Return default form factor for dimensionality dim """
+    if dim == 2:
+        return Circle2DForm
+    elif dim == 3:
+        return SphereForm
+    else:
+        raise(ValueError("dim must be either 2 or 3. Gave {}".format(dim)))
+
 class ParticleBase(object):
     """ Class representing a particle in a crystal stucture """
     
@@ -176,6 +185,7 @@ class ParticleBase(object):
         """
         new_particle = deepcopy(self)
         new_particle.position = newPosition
+        return new_particle
     
     @property
     def typename(self):
@@ -208,10 +218,10 @@ class ParticleBase(object):
         ValueError
             If the new position does not match the dimensionality of the particle.
         """
-        np = np.array(newPosition)
-        if not len(np) == self.dim:
+        npos = np.array(newPosition)
+        if not len(npos) == self.dim:
             raise(ValueError("newPosition ({}) must match particle dimensionality ({}).".format(newPosition, self.dim)))
-        self._position = np
+        self._position = npos
         self._setPosition()
     
     def typeMatch(self, other):
@@ -235,6 +245,15 @@ class ParticleBase(object):
     
     def __eq__(self, other):
         return self.typeMatch(other) and self.positionMatch(other)
+    
+    def __str__(self):
+        formstr = "< {} object with {} >"
+        out = formstr.format(type(self).__name__, self._output_data())
+        return out
+        
+    def _output_data(self):
+        formstr = "Type = {}, Position = {}"
+        return formstr.format(self.typename, self.position)
     
     def _setPosition(self):
         """ Adjust current position for unit cell and tolerance constraints """
@@ -312,13 +331,34 @@ class ParticleSet(object):
     @property
     def particles(self):
         return deepcopy(self._particles)
+    
+    def __str__(self):
+        return "< {} with {} particles >".format(type(self).__name__, self.nparticles)
+    
+    def particleList(self):
+        """ Return a string with each particle separated by a newline """
+        buildStr = "Particles:"
+        for p in self._particles:
+            buildStr += "\n{}".format(p)
+        return buildStr
         
 class ScatteringParticle(ParticleBase):
     """ Particle with associated Form Factor. """
-    def __init__(self, position, formFactor):
-        self._formFactor = formFactor
+    def __init__(self, position, formFactor=None):
         super().__init__("Micelle", position)
+        if formFactor is None:
+            self._formFactor = defaultFormFactor(self.dim)
+        else:
+            self._formFactor = formFactor
     
     def formFactorAmplitude(qnorm, vol, smear):
         return self._formFactor.formFactorAmplitude(qnorm, vol, smear)
+    
+    @property
+    def formFactor(self):
+        return self._formFactor
+    
+    def _output_data(self):
+        out = "{}, form factor = {}".format(super()._output_data(), self._formFactor.__name__)
+        return out
 

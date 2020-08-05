@@ -2,7 +2,8 @@
 from pscfFieldGen.structure import ( Lattice,
                         ParticleBase,
                         ScatteringParticle,
-                        POSITION_TOLERANCE )
+                        POSITION_TOLERANCE,
+                        buildCrystal )
 #from fieldGeneration.crystal_structs.crystalStructs.lattice import Lattice
 #from fieldGeneration.crystal_structs.crystalStructs.crystal import ParticleBase
 from pscfFieldGen.fieldGenerators import FieldCalculator
@@ -147,22 +148,26 @@ if __name__=="__main__":
     latticeParams = expandLatticeParameters(param)
     dim = param.dim
     lattice = Lattice.latticeFromParameters(dim, **latticeParams)
+    # Create Crystal Object
+    groupname = param.group_name
+    crystalsystem = param.crystal_system
+    crystal = buildCrystal( input_style, 
+                            nparticle, 
+                            partPositions, 
+                            lattice, 
+                            group_name=groupname,
+                            crystal_system=crystalsystem )
     # Create Calculator Object
-    group_name = param.group_name
-    crystal_system = param.crystal_system
-    calculator = FieldCalculator(dim = dim, \
-                                lattice = lattice, \
-                                N_particles = nparticle, \
-                                particlePositions = partPositions, \
-                                coord_input_style = input_style, \
-                                systemName = crystal_system, \
-                                groupName = group_name)
+    calculator = FieldCalculator(crystal)
+    #calculator = FieldCalculator(dim = dim, \
+    #                            lattice = lattice, \
+    #                            N_particles = nparticle, \
+    #                            particlePositions = partPositions, \
+    #                            coord_input_style = input_style, \
+    #                            systemName = crystal_system, \
+    #                            groupName = group_name)
     if args.trace:
-        print(lattice)
-        print(lattice.latticeParameters)
-        print(calculator.crystal)
-        for p in calculator.crystal.particlePositions():
-            print(p)
+        print(crystal.longString)
     # Generate File
     generate_field_file(param, calculator, outFile)
             
