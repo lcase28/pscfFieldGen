@@ -6,19 +6,19 @@ A tool to generate PSCF initial guess files for bulk morphologies involving asse
 **NOTE:** This is a beta release. See Notes section at the bottom of this file for special
 assumptions made in its operation.
 
-##Contents
+## Contents
 
- * [Requirements](##-requirements)
- * [Installation](##-installation)
-    * [Obtaining Source Code](###-obtaining-source-code)
-    * [Modifying Search Paths](###-modifying-search-paths)
-        * [Adding to PYTHONPATH](####-adding-to-pythonpath)
-        * [Anaconda Python](####-anaconda-python)
- * [Running pscfFieldGen](##-running-pscffieldgen)
-    * [Model File](###-model-file)
-    * [Parameter File](###-parameter-file)
-    * [Use with C++/Cuda Version](###-use-with-c++/cuda-versions)
- * [Special Notes](##-special-notes)
+ * [Requirements](#-requirements)
+ * [Installation](#-installation)
+    * [Obtaining Source Code](#-obtaining-source-code)
+    * [Modifying Search Paths](#-modifying-search-paths)
+        * [Adding to PYTHONPATH](#-adding-to-pythonpath)
+        * [Anaconda Python](#-anaconda-python)
+ * [Running pscfFieldGen](#-running-pscffieldgen)
+    * [Model File](#-model-file)
+    * [Parameter File](#-parameter-file)
+    * [Use with C++/Cuda Version](#-use-with-c++/cuda-versions)
+ * [Special Notes](#-special-notes)
         
 
 ## Requirements
