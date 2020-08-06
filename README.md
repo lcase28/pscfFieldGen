@@ -436,3 +436,7 @@ resulting in some error in the resultant positions. When values are truncated ab
 the positional tolerance, duplicate particles can be missed. _User control of 
 this tolerance can later be added_.
 
+**For blends, the parameter file must be written for the Canonical Ensemble:**
+The tool requires an explicit volume fraction composition. Thus, the blend fraction of
+each component in the system must be specified - as is required in Canonical
+calculations. Grand Canonical parameter files will cause an error.
