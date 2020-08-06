@@ -8,17 +8,17 @@ assumptions made in its operation.
 
 ## Contents
 
- * [Requirements](#-requirements)
- * [Installation](#-installation)
-    * [Obtaining Source Code](#-obtaining-source-code)
-    * [Modifying Search Paths](#-modifying-search-paths)
-        * [Adding to PYTHONPATH](#-adding-to-pythonpath)
-        * [Anaconda Python](#-anaconda-python)
- * [Running pscfFieldGen](#-running-pscffieldgen)
-    * [Model File](#-model-file)
-    * [Parameter File](#-parameter-file)
-    * [Use with C++/Cuda Version](#-use-with-c++/cuda-versions)
- * [Special Notes](#-special-notes)
+ * [Requirements](#requirements)
+ * [Installation](#Installation)
+    * [Obtaining Source Code](#obtaining-source-code)
+    * [Modifying Search Paths](#modifying-search-paths)
+        * [Adding to PYTHONPATH](#adding-to-pythonpath)
+        * [Anaconda Python](#anaconda-python)
+ * [Running pscfFieldGen](#running-pscffieldgen)
+    * [Model File](#model-file)
+    * [Parameter File](#parameter-file)
+    * [Use with C++/Cuda Version](#use-with-c++/cuda-versions)
+ * [Special Notes](#special-notes)
         
 
 ## Requirements
