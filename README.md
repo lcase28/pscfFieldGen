@@ -6,6 +6,21 @@ A tool to generate PSCF initial guess files for bulk morphologies involving asse
 **NOTE:** This is a beta release. See Notes section at the bottom of this file for special
 assumptions made in its operation.
 
+##Contents
+
+ * [Requirements](##-requirements)
+ * [Installation](##-installation)
+    * [Obtaining Source Code](###-obtaining-source-code)
+    * [Modifying Search Paths](###-modifying-search-paths)
+        * [Adding to PYTHONPATH](####-adding-to-pythonpath)
+        * [Anaconda Python](####-anaconda-python)
+ * [Running pscfFieldGen](##-running-pscffieldgen)
+    * [Model File](###-model-file)
+    * [Parameter File](###-parameter-file)
+    * [Use with C++/Cuda Version](###-use-with-c++/cuda-versions)
+ * [Special Notes](##-special-notes)
+        
+
 ## Requirements
 
 **Use of this tool requires Python 3.4 or later** as it makes use of some of the newer additions
@@ -176,6 +191,23 @@ The Model file acts as the primary input for the program. Data in this file is s
 by *case-sensitive* keywords. 
 Formatting is flexible, requiring only that individual entries be separated
 by some amount of whitespace (spaces, tabs, newlines).
+
+Below is an example of what the contents of a model file might look like for a BCC phase.
+
+```
+parameter_file      param_kgrid
+output_file         rho_kgrid
+
+core_monomer        0
+
+coord_input_style   basis
+N_particles         2
+particle_positions
+        0.0     0.0     0.0
+        0.5     0.5     0.5
+
+finish
+```
 
 Three fields are required:
 
