@@ -17,7 +17,10 @@ assumptions made in its operation.
  * [Running pscfFieldGen](#running-pscffieldgen)
     * [Model File](#model-file)
     * [Parameter File](#parameter-file)
-    * [Use with C++/Cuda Version](#use-with-c++/cuda-versions)
+    * [Use with pscfpp (C++/Cuda Version)](#use-with-pscfpp)
+        * [Unit Cell and Crystal System](#unit-cell)
+        * [Space Group Name](#space-group)
+        * [Branched Polymers](#branched-polymers)
  * [Special Notes](#special-notes)
         
 
@@ -261,7 +264,7 @@ Within the parameter file, the `MONOMERS`, `CHAINS`, `SOLVENTS`, `COMPOSITION`, 
 Calculation or utility commands (such as `ITERATE`, `SWEEP`, or `KGRID_TO_RGRID`) are not required
 for the guess generation to work.
 
-### Use With C++/Cuda Versions
+### Use With pscfpp
 
 As mentioned, presently only Parameter files for the Fortran version are supported.
 Support for the C++/Cuda parameter files will be added, but is not yet available.
@@ -273,8 +276,9 @@ Most data can be ported directly between the two formats, taking care to follow 
 differing formats (such as the organization of `chi` interactions),
 punctuation (such as placement of single quotes around string data in the Fortran format),
 and keyword labels (such as `mesh` vs `ngrid` for the spatial discretization).
+**Three entries will require special attention.**
 
-**Three entries will require special attention:**
+#### Unit Cell
 
 The first of these is treatment of the unit cell's crystal system identifier.
 The Fortran version's parameter file expects the `crystal_system` to be enclosed in
@@ -323,6 +327,8 @@ cell_param
 in order to yield the proper kgrid file. Note the lack of single quotes
 around the crystal system.
 
+#### Space Group
+
 The second of these is treatment of the `groupName` entry.
 The `groupName` (`group_name` in the Fortran file) identifies the space group of the
 system. The key difference between the Fortran and C++/Cuda versions is that, while 
@@ -366,6 +372,8 @@ Please not that the changes just described for the `crystal_system` and `group_n
 entries are only required to make the kgrid file usable
 in C++/Cuda calculations as generated. If the user prefers, they can follow the original
 PSCF Fortran conventions for these entries and correct the kgrid file after generation.
+
+#### Branched Polymers
 
 The last change relates to the Polymer chain data. The C++/Cuda code is able to handle
 branched polymer architectures which are not supported in the Fortran software, meaning
@@ -427,3 +435,4 @@ from truncated values (such as 0.3333, or 0.6667) will cascade through symmetry 
 resulting in some error in the resultant positions. When values are truncated above
 the positional tolerance, duplicate particles can be missed. _User control of 
 this tolerance can later be added_.
+
