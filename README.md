@@ -26,14 +26,16 @@ assumptions made in its operation.
 
 ## Requirements
 
-**Use of this tool requires Python 3.4 or later** as it makes use of some of the newer additions
+[Back to Top](#pscf-particle-phase-field-generator)
+
+**Use of this tool requires Python 3.5 or later** as it makes use of some of the newer additions
 to the standard library.
 This tool has been developed using the Anaconda distribution of Python 3.7 on MacOS, Ubuntu Linux,
 and Unix. Because of this, **Python 3.7 is the minimum recommended version**; earlier versions
 may encounter unanticipated issues with back-compatibility.
 
 The following required modules should be included in most Python distributions
-(Version 3.4 or later) as part of the standard library, and should not require
+(Version 3.5 or later) as part of the standard library, and should not require
 additional installation. They should, however, be available in the active
 python environment.
 
@@ -49,16 +51,24 @@ python environment.
 
 In addition, the following libraries are also required:
 
- * Numpy
- * Scipy
- * Sympy
+ * numpy
+ * scipy
+ * sympy
 
 All three of these libraries are included standard with Anaconda Python. For installation
 instructions for other Python distributions, see the project sites for these packages.
 
+To check that the modules are available in the current python environment, open an
+interactive python terminal and attempt to import each library using `import [library_name]`
+such as `import abc`.
+
 ## Installation
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 ### Obtaining Source Code
+
+[Back to Top](#pscf-particle-phase-field-generator)
 
 The source code for the tool is hosted on Github. The easiest way to obtain the code is
 with a git version control client. If such a client is installed on your computer,
@@ -66,7 +76,7 @@ first `cd` into the directory in which you want to place the pscfFieldGen root
 directory. From there, the command
 
 ```
-> git clone [url]
+$ git clone https://github.umn.edu/case0234/pscfFieldGen.git
 ```
 
 will create a complete working copy of the source code in a
@@ -76,16 +86,20 @@ analogous folder.
 
 ### Modifying Search Paths
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 To allow the operating system and python interpreter to find the pscfFieldGen program, 
 you will have to make some modifications to environment variables.
 
 #### Adding to PYTHONPATH
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 Many python installations make use of the environment variable PYTHONPATH when searching
 for modules. To add pscfFieldGen to this search path, use the following command
 
 ```
->  PYTHONPATH=$PYTHONPATH:/path/to/root/pscfFieldGen
+$  PYTHONPATH=$PYTHONPATH:/path/to/root/pscfFieldGen
 ```
 
 Executing this on the command line only modifies the path until the end of the terminal
@@ -93,6 +107,8 @@ session. To make the change permanent, add the above command to the file ~/.bash
 or to ~/.profile (on Mac OS).
 
 #### Anaconda Python
+
+[Back to Top](#pscf-particle-phase-field-generator)
 
 With Anaconda Python and other conda-managed environments, changes to the PYTHONPATH
 environment variable often are not reflected in the python interpreter's effective
@@ -104,13 +120,13 @@ The easiest way to add the tool to site-packages, is using the conda-develop com
 included in the conda-build package. Install this package using 
 
 ```
-> conda install conda-build
+$ conda install conda-build
 ```
 
 When that installation completes, enter the following command
 
 ```
-> conda-develop /path/to/root/pscfFieldGen
+$ conda-develop /path/to/root/pscfFieldGen
 ```
 
 where "/path/to/root/" represents the absolute path to the directory from which you cloned
@@ -148,6 +164,8 @@ is one possibility.
 
 ## Running pscfFieldGen
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 Running the software requires 2 files:
 
  * A Model file specifying filenames and particle positions.
@@ -166,7 +184,7 @@ and after you have produced the two necessary input files, the program can be ru
 using the command
 
 ```
-> python -m pscfFieldGen -f model_file
+$ python -m pscfFieldGen -f model_file
 ```
 
 In the above command, the -m flag tells the python interpreter to look for the module's
@@ -180,7 +198,7 @@ the Lattice, and crystal structure details.
 In order to redirect this trace to a file, the command can be executed as:
 
 ```
-> python -m pscfFieldGen -f model_file -t > trace_file
+$ python -m pscfFieldGen -f model_file -t > trace_file
 ```
 
 where "trace_file" is the name of the file storing the trace data.
@@ -189,6 +207,8 @@ Example files for a range of calculations are included in the `examples` directo
 the root of the project repository.
 
 ### Model File
+
+[Back to Top](#pscf-particle-phase-field-generator)
 
 The Model file acts as the primary input for the program. Data in this file is specified
 by *case-sensitive* keywords. 
@@ -251,6 +271,8 @@ Presence of any unrecognized keywords will raise an error and terminate the prog
 
 ### Parameter File
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 For detailed information regarding the parameter file format, please see the 
 [PSCF User Manual](https://pscf.readthedocs.io/en/latest/param.html)
 
@@ -266,6 +288,8 @@ for the guess generation to work.
 
 ### Use With pscfpp
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 As mentioned, presently only Parameter files for the Fortran version are supported.
 Support for the C++/Cuda parameter files will be added, but is not yet available.
 However, because the field file format used by the C++/Cuda version of the software
@@ -279,6 +303,8 @@ and keyword labels (such as `mesh` vs `ngrid` for the spatial discretization).
 **Three entries will require special attention.**
 
 #### Unit Cell
+
+[Back to Top](#pscf-particle-phase-field-generator)
 
 The first of these is treatment of the unit cell's crystal system identifier.
 The Fortran version's parameter file expects the `crystal_system` to be enclosed in
@@ -329,6 +355,8 @@ around the crystal system.
 
 #### Space Group
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 The second of these is treatment of the `groupName` entry.
 The `groupName` (`group_name` in the Fortran file) identifies the space group of the
 system. The key difference between the Fortran and C++/Cuda versions is that, while 
@@ -368,12 +396,14 @@ group_name
 in order to ensure the proper kgrid file format. Note, again, the lack of 
 single quotes, and the updated string format.
 
-Please not that the changes just described for the `crystal_system` and `group_name`
+Please note that the changes just described for the `crystal_system` and `group_name`
 entries are only required to make the kgrid file usable
 in C++/Cuda calculations as generated. If the user prefers, they can follow the original
 PSCF Fortran conventions for these entries and correct the kgrid file after generation.
 
 #### Branched Polymers
+
+[Back to Top](#pscf-particle-phase-field-generator)
 
 The last change relates to the Polymer chain data. The C++/Cuda code is able to handle
 branched polymer architectures which are not supported in the Fortran software, meaning
@@ -424,6 +454,8 @@ the kgrid format into the rgrid or basis formats required for the calculations.
 
 ## Special Notes
 
+[Back to Top](#pscf-particle-phase-field-generator)
+
 **Input particle positions should be precise to at least 4 decimal places:**
 When generating the unit cell structure, particle positions are considered
 identical when all components of fractional coordinate position differ by less
@@ -440,3 +472,6 @@ this tolerance can later be added_.
 The tool requires an explicit volume fraction composition. Thus, the blend fraction of
 each component in the system must be specified - as is required in Canonical
 calculations. Grand Canonical parameter files will cause an error.
+
+[Back to Top](#pscf-particle-phase-field-generator)
+
