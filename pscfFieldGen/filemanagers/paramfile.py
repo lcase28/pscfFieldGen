@@ -172,6 +172,24 @@ class ParamFile(ABC):
         """
         pass
     
+    @property
+    @abstractmethod
+    def crystal_system(self):
+        """ Crystal system being described
+        
+        Values should be consistent with the crystal_system input in PSCF Fortran user guide.
+        """
+        pass
+    
+    @property
+    @abstractmethod
+    def group_name(self):
+        """ The name of the space group.
+        
+        String should be consistent with the group_name entry described in PSCF Fortran user guide.
+        """
+        pass
+    
 class PscfParam(ParamFile):
     """ Parameter File Wrapper for PSCF (Fortran) ParamFile class. """
     
@@ -444,6 +462,16 @@ class PscfParam(ParamFile):
             chi = chiprod ** (1.0 / (nMon - 1))
         w = 2*b / np.sqrt(6.0 * chi)
         return w
+    
+    @property
+    def crystal_system(self):
+        """ Crystal system being described """
+        return self.file.crystal_system
+    
+    @property
+    def group_name(self):
+        """ The name of the space group. """
+        return self.file.group_name
     
 class PscfppParam(ParamFile):
     """ Parameter File Wrapper for PSCF (C++/Cuda) ParamFile class. """
@@ -755,4 +783,22 @@ class PscfppParam(ParamFile):
                 chi[col][row] = val
         return chi
     
+    @property
+    def crystal_system(self):
+        """ Crystal system being described """
+        return self.file.unitCell.value(0)
+    
+    @property
+    def group_name(self):
+        """ The name of the space group. """
+        return self._change_groupName_format(self.file.groupName.value())
+    
+    @staticmethod
+    def _change_groupName_format(group_name):
+        """ Convert formatting between Fortran-style names and C++/Cuda style names """
+        out = deepcopy(group_name)
+        out = out.replace(r"_",r" ")
+        out = out.replace(r"%",r"/")
+        out = out.replace(r":",r" : ")
+        return out
     

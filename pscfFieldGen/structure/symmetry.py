@@ -1440,19 +1440,6 @@ GENERATOR_COMPONENT_REGEX = re.compile(r"\A(?P<psm>[a-nz])(?P<acomp>[A-GOXYZ])(?
 """ Regex for parsing alternate setting positions """
 ALTERNATE_SETTING_REGEX = re.compile(r"\A1(?P<acomp>[A-GOXYZ])(?P<bcomp>[A-GOXYZ])(?P<ccomp>[A-GOXYZ])(?P<setnum>[12])\Z")
 
-def _change_groupName_format(group_name, toFortran=False):
-    """ Convert formatting between Fortran-style names and C++/Cuda style names """
-    out = deepcopy(group_name)
-    if toFortran:
-        out = out.replace(r"_",r" ")
-        out = out.replace(r"%",r"/")
-        out = out.replace(r":",r" : ")
-    else:
-        out = out.replace(r" : ",r":")
-        out = out.replace(r"/",r"%")
-        out = out.replace(r" ",r"_")
-    return out
-
 def getGroupID(dim, crystal_system, group_name):
     """
     Get the plane or space group number, according to the International Tables of Crystallography (2016).
@@ -1515,12 +1502,12 @@ def getGroupName(dim, crystal_system, group_id):
 
 def _getGeneratorString(dim, crystal_system, group_name):
     out = GENERATOR_STRINGS.get((dim, crystal_system, group_name), None)
-    if out is None:
-        # Try converting from C++/Cuda-style to Fortran-style before raising error
-        newName = _change_groupName_format(group_name,toFortran=True)
-        out = GENERATOR_STRINGS.get((dim, crystal_system, newName), None)
-        if out is None:
-            raise(ValueError("Given group is not available: (dim, crystal_system, group) = (,{!r},{!r})".format(dim,crystal_system, group_name)))
+    #if out is None:
+    #    # Try converting from C++/Cuda-style to Fortran-style before raising error
+    #    newName = _change_groupName_format(group_name,toFortran=True)
+    #    out = GENERATOR_STRINGS.get((dim, crystal_system, newName), None)
+    #    if out is None:
+    #        raise(ValueError("Given group is not available: (dim, crystal_system, group) = (,{!r},{!r})".format(dim,crystal_system, group_name)))
     return out
 
 def _buildGenerator(dim, genstr):
@@ -1565,13 +1552,13 @@ def _originShift(dim, origstring):
 def _getGroupCounts(dim, crystal_system, group_name):
     key = ( dim, crystal_system, group_name )
     data = SYMMETRY_POSITION_COUNTS.get( key, None )
-    if data is None:
-        # Try converting from C++/Cuda-style to Fortran-style before raising error
-        newName = _change_groupName_format(group_name,toFortran=True)
-        key = (dim, crystal_system, newName)
-        data = SYMMETRY_POSITION_COUNTS.get( key, None )
-        if data is None:
-            raise(ValueError("No match found for space group {}".format(key)))
+    #if data is None:
+    #    # Try converting from C++/Cuda-style to Fortran-style before raising error
+    #    newName = _change_groupName_format(group_name,toFortran=True)
+    #    key = (dim, crystal_system, newName)
+    #    data = SYMMETRY_POSITION_COUNTS.get( key, None )
+    #    if data is None:
+    #        raise(ValueError("No match found for space group {}".format(key)))
     out = { "num_generators" : data[0], \
             "num_operations" : data[1], \
             "num_positions" : data[2] }
