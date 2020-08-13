@@ -59,7 +59,8 @@ class IO:
         elif type == 'real':
             return float(data)
         elif type == 'char':
-            return strip_quotes(data)
+            return data
+            #return strip_quotes(data)
         elif type == 'logic':
             if data in ['T','true', 'TRUE', 'True']:
                 return 1
@@ -177,7 +178,7 @@ class IO:
         elif type == 'real':
             return '%20.10E' % data
         elif type == 'char':
-            data = "'" + data + "'" 
+            #data = "'" + data + "'" 
             return "%20s" % data 
         elif type == 'logic':
             if data:
