@@ -1,5 +1,5 @@
-import pscfFieldGen.pscfFileManagers as pscf
-import pscfFieldGen.pscfppFileManagers as pscfpp
+import pscfFieldGen.filemanagers.pscf as pscf
+import pscfFieldGen.filemanagers.pscfpp as pscfpp
 
 from abc import ABC, abstractmethod
 import numpy as np
@@ -469,8 +469,36 @@ class PscfppParam(ParamFile):
     def cleanFieldFile(self):
         """
         Return a pscfpp.WaveVectFieldFile instance consistent with the parameter file.
+        
+        NOTE: Currently requires that a groupName be present.
         """
-        raise(NotImplementedError("PscfppParam.cleanFieldFile() not yet implemented"))
+        kgrid = pscfpp.WaveVectFieldFile()
+        kgrid.dim = self.file.dim
+        kgrid.crystal_system = self.file.unitCell.value(0)
+        kgrid.N_cell_param, kgrid.cell_param = self._parse_cell_params()
+        kgrid.group_name = self.file.groupName.value()
+        kgrid.N_monomer = self.nMonomer
+        kgrid.ngrid = self.ngrid
+        return kgrid
+    
+    __nCellParamRef = { (1,'lamellar')      :   1, \
+                        (2,'square')        :   1, \
+                        (2,'hexagonal')     :   1, \
+                        (2,'rectangular')   :   2, \
+                        (2,'oblique')       :   3, \
+                        (3,'cubic')         :   1, \
+                        (3,'tetragonal')    :   2, \
+                        (3,'orthorhombic')  :   3, \
+                        (3,'monoclinic')    :   4, \
+                        (3,'hexagonal')     :   2, \
+                        (3,'trigonal')      :   2, \
+                        (3,'triclinic')     :   6    }
+    
+    def _parse_cell_params(self):
+        crys = self.file.unitCell.value(0)
+        nparam = self.__class__.__nCellParamRef.get( (self.dim, crys) )
+        param = [ self.file.unitCell.value(i+1) for i in range(nparam) ]
+        return nparam, np.array(param)
     
     @property
     def dim(self):
