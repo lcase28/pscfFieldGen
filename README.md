@@ -17,10 +17,6 @@ assumptions made in its operation.
  * [Running pscfFieldGen](#running-pscffieldgen)
     * [Model File](#model-file)
     * [Parameter File](#parameter-file)
-    * [Use with pscfpp (C++/Cuda Version)](#use-with-pscfpp)
-        * [Unit Cell and Crystal System](#unit-cell)
-        * [Space Group Name](#space-group)
-        * [Branched Polymers](#branched-polymers)
  * [Special Notes](#special-notes)
         
 
@@ -174,10 +170,6 @@ Running the software requires 2 files:
 In order to simplify input for the user, crystallographic and composition information
 are taken from a PSCF parameter file. 
 Detailed information about the model file is provided in the next subsection.
-Presently, only parameter files consistent with
-the Fortran version of the software are supported. Despite this, the program can still
-generate initial guesses for use with the C++/Cuda version. 
-See the section **Use With C++/Cuda Versions** for special instructions on doing so.
 
 After the tool has been installed, and is discoverable by your Python interpreter,
 and after you have produced the two necessary input files, the program can be run
@@ -218,6 +210,7 @@ by some amount of whitespace (spaces, tabs, newlines).
 Below is an example of what the contents of a model file might look like for a BCC phase.
 
 ```
+software            pscf
 parameter_file      param_kgrid
 output_file         rho_kgrid
 
@@ -232,8 +225,12 @@ particle_positions
 finish
 ```
 
-Three fields are required:
+Four fields are required:
 
+ * `software` : This keyword would be followed by a flag indicating the PSCF version
+this execution is targeting. Currently flag *pscf* (for the Fortran version) and 
+*pscfpp* (for the C++/Cuda versions) are the only acceptable entries. This should be
+the first entry in the model file, and is required before specifying `parameter_file`.
  * `parameter_file` : This keyword would be followed by a single file name referencing
 the parameter file. The 'file name' in this case can be any path that would allow the
 file to be found from the current directory.
@@ -274,183 +271,11 @@ Presence of any unrecognized keywords will raise an error and terminate the prog
 [Back to Top](#pscf-particle-phase-field-generator)
 
 For detailed information regarding the parameter file format, please see the 
-[PSCF User Manual](https://pscf.readthedocs.io/en/latest/param.html)
+User manual for the specific version of PSCF.
 
 System specifications are taken from a PSCF Parameter File.
 This is done to simplify user input, with the assumption that the user will first generate
 the parameter file for the desired calculation, and use it to generate the initial guess.
-**Currently, only parameter files consistent with the Fortran version of the software are valid.**
-
-Within the parameter file, the `MONOMERS`, `CHAINS`, `SOLVENTS`, `COMPOSITION`, `INTERACTIONS`,
-`UNIT_CELL`, `DISCRETIZATION`, and `BASIS` sections are required, along with the `FINISH` keyword.
-Calculation or utility commands (such as `ITERATE`, `SWEEP`, or `KGRID_TO_RGRID`) are not required
-for the guess generation to work.
-
-### Use With pscfpp
-
-[Back to Top](#pscf-particle-phase-field-generator)
-
-As mentioned, presently only Parameter files for the Fortran version are supported.
-Support for the C++/Cuda parameter files will be added, but is not yet available.
-However, because the field file format used by the C++/Cuda version of the software
-matches that used in the Fortran version, this generator can still be used.
-
-In order to do so, system data must be formatted into a PSCF Fortran-style parameter file.
-Most data can be ported directly between the two formats, taking care to follow the
-differing formats (such as the organization of `chi` interactions),
-punctuation (such as placement of single quotes around string data in the Fortran format),
-and keyword labels (such as `mesh` vs `ngrid` for the spatial discretization).
-**Three entries will require special attention.**
-
-#### Unit Cell
-
-[Back to Top](#pscf-particle-phase-field-generator)
-
-The first of these is treatment of the unit cell's crystal system identifier.
-The Fortran version's parameter file expects the `crystal_system` to be enclosed in
-single quotes, while C++/Cuda version does not. When using this tool for a C++/Cuda
-calculation, exclude the quotation marks in the Fortran-style parameter file. Thus,
-if the C++/Cuda parameter file contains
-
-```
-...
-    unitCell    cubic   1.9
-...
-```
-
-a proper PSCF Fortran parameter file would contain
-
-```
-...
-UNIT_CELL
-dim
-            2
-crystal_system
-            'cubic'
-N_cell_param
-            1
-cell_param
-            1.9
-...
-``` 
-
-but the Fortran-style parameter file used for this tool would contain
-
-```
-...
-UNIT_CELL
-dim
-            2
-crystal_system
-            cubic
-N_cell_param
-            1
-cell_param
-            1.9
-...
-``` 
-
-in order to yield the proper kgrid file. Note the lack of single quotes
-around the crystal system.
-
-#### Space Group
-
-[Back to Top](#pscf-particle-phase-field-generator)
-
-The second of these is treatment of the `groupName` entry.
-The `groupName` (`group_name` in the Fortran file) identifies the space group of the
-system. The key difference between the Fortran and C++/Cuda versions is that, while 
-Fortran group names contain spaces between distinct symbols, while the C++/Cuda names
-separate distinct symbols with underbars. To accommodate this distinction, when generating
-the Fortran-style parameter file, one should use the C++/Cuda group name string in the
-same location as the Fortran group name string.
-For example, if the C++/Cuda parameter file contains
-
-```
-...
-    groupName      I_m_-3_m
-...
-```
-
-a proper PSCF Fortran parameter file would contain
-
-```
-...
-BASIS
-group_name
-           'I m -3 m'
-...
-```
-
-but the Fortran-style parameter file for this tool should instead contain
-
-```
-...
-BASIS
-group_name
-           I_m_-3_m
-...
-```
-
-
-in order to ensure the proper kgrid file format. Note, again, the lack of 
-single quotes, and the updated string format.
-
-Please note that the changes just described for the `crystal_system` and `group_name`
-entries are only required to make the kgrid file usable
-in C++/Cuda calculations as generated. If the user prefers, they can follow the original
-PSCF Fortran conventions for these entries and correct the kgrid file after generation.
-
-#### Branched Polymers
-
-[Back to Top](#pscf-particle-phase-field-generator)
-
-The last change relates to the Polymer chain data. The C++/Cuda code is able to handle
-branched polymer architectures which are not supported in the Fortran software, meaning
-that the polymer chain structure may not be able to be directly translated. The easiest
-approach to correcting this is to simply linearize the branched polymer. That is to say,
-take the blocks in the order specified in the C++/Cuda parameter file, and treat them as
-laying sequentially along a linear multiblock polymer. In this tool, the polymer structure
-is only used to determine the overall volume fraction of each monomer species. Once the
-volume fractions are calculated, the difference between a linear and branched polymer
-is inconsequential in this field generation algorithm.
-As an example, if a polymer in the system has 4 branches emanating from one vertex,
-the C++/Cuda parameter file might contain
-
-```
-...
-   Polymer{                    
-       nBlock  4               
-       nVertex 5               
-       blocks  0  0  0  1  0.30
-               1  1  1  2  0.30
-               2  0  1  3  0.20
-               3  1  1  4  0.20
-       phi     1.0             
-   }                           
-...
-```
-
-in which case the Fortran-style parameter file would contain
-
-```
-...
-CHAINS                                     
-N_chain                                    
-               1                           
-N_block                                    
-               4                           
-block_monomer                              
-               1       2       1       2   
-block_length                               
-               0.30    0.30    0.20    0.20
-...
-```
-
-in order to generate the proper overall volume fractions.
-
-Once the field file is generated, the C++/Cuda version of PSCF will be able to convert
-the kgrid format into the rgrid or basis formats required for the calculations.
 
 ## Special Notes
 
