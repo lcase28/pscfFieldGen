@@ -6,4 +6,4 @@ pscfFieldGen package. Also used as central referencing point for
 all software-specific file managers in their own sub-packages.
 """
 
-from paramfile import *
+from .paramfile import *

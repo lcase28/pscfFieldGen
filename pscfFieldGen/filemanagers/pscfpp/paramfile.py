@@ -1,8 +1,9 @@
 from .paramcomposite import ParamComposite
+from .record import Record
 
 import numpy as np
 
-class Polymer(Object):
+class Polymer():
     """ Wrapper for ParamComposite instances representing Polymer{...} blocks. """
     
     def __init__(self, source):
@@ -14,7 +15,7 @@ class Polymer(Object):
         source : ParamComposite
             The ParamComposite holding the data
         """
-        if not source.label_ == "Polymer{":
+        if not source.label_ == "Polymer":
             raise(ValueError("Invalid source given for polymer:\n{}".format(source)))
         self.source = source
     
@@ -35,14 +36,14 @@ class Polymer(Object):
     @property
     def phi(self):
         try:
-            return self.source.phi
+            return self.source.phi.value()
         except(AttributeError):
             return None
     
     @property
     def mu(self):
         try:
-            return self.source.mu
+            return self.source.mu.value()
         except(AttributeError):
             return None
     
@@ -82,8 +83,8 @@ class Polymer(Object):
         """
         ntot = 0.0
         for i in range(self.nBlock.value()):
-            if monomer == -1 or monomer == self.blocks.lines(i).value(1):
-                ntot += self.blocks.lines(i).value(4)
+            if monomer == -1 or monomer == self.blocks.line(i).value(1):
+                ntot += self.blocks.line(i).value(4)
         return ntot
     
     def monomerFraction(self, monomer):
@@ -126,7 +127,7 @@ class Polymer(Object):
         """
         l = []
         for i in range(nMonomer):
-            l.append(self.totalLength(i)
+            l.append(self.totalLength(i))
         return np.array(l)
 
 class ParamFile(ParamComposite):
@@ -143,11 +144,7 @@ class ParamFile(ParamComposite):
             records.append(Record(line))
         super().__init__()
         self.read(records, 0)
-        self._polymerConversion()
-        return p
-    
-    def __polymerConversion(self):
-        """ Place all `Polymer{` ParamComposite Children in Polymer wrappers. """
+        # Convert polymers to Polymer objects
         npoly = self.Mixture.nPolymer.value()
         if npoly == 1:
             self.Mixture.Polymer = [Polymer(self.Mixture.Polymer)]
@@ -158,22 +155,21 @@ class ParamFile(ParamComposite):
     @property
     def dim(self):
         """ Dimensionality of the system in the parameter file (1, 2, or 3) """
-        param = self.file
         # confirm at least one dimension
         try:
-            a = param.mesh.value(0)
+            a = self.mesh.value(0)
         except(IndexError):
             raise(ValueError("System improperly defined to determine dimensionality"))
         
         # check at least 2 dimensions
         try:
-            a = param.mesh.value(1)
+            a = self.mesh.value(1)
         except(IndexError):
             return 1
         
         # check at least 3 dimensions
         try:
-            a = param.mesh.value(2)
+            a = self.mesh.value(2)
             return 3
         except(IndexError):
             return 2

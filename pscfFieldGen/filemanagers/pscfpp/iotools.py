@@ -177,7 +177,7 @@ class IO:
         elif type == 'real':
             return '%20.10E' % data
         elif type == 'char':
-            data = "'" + data + "'" 
+            #data = "'" + data + "'" 
             return "%20s" % data 
         elif type == 'logic':
             if data:

@@ -1,2 +1,4 @@
 rm in/*
 rm out/*
+rm GeneratorTrace
+rm conversionTrace

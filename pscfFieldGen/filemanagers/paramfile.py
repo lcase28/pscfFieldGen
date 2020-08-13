@@ -2,6 +2,7 @@ import pscfFieldGen.filemanagers.pscf as pscf
 import pscfFieldGen.filemanagers.pscfpp as pscfpp
 
 from abc import ABC, abstractmethod
+from copy import deepcopy
 import numpy as np
 
 class ParamFile(ABC):
@@ -10,7 +11,7 @@ class ParamFile(ABC):
     def __init__(self, p_file):
         self.file = p_file
     
-    def __check_ParamFile_Type(self, given, needed):
+    def _check_ParamFile_Type(self, given, needed):
         """
         Private method for use in constructors.
         
@@ -49,6 +50,7 @@ class ParamFile(ABC):
                 a pathlib.Path object or string filename, opens the file, writes the
                 field file contents to it, and closes the file.
         """
+        pass
     
     @property
     @abstractmethod
@@ -98,6 +100,7 @@ class ParamFile(ABC):
     @abstractmethod
     def nMonomer(self):
         """ The number of monomer (chemical) types in the system. """
+        pass
     
     @abstractmethod
     def getMonomerFractions(self):
@@ -202,8 +205,8 @@ class PscfParam(ParamFile):
         p_file : pscfFieldGen.pscfFileManagers.ParamFile
             The ParamFile instance. (Treated as Read-Only by wrapper)
         """
-        self.__check_ParamFile_Type(type(p_file),pscf.ParamFile)
-        super().__init__(pfile)
+        self._check_ParamFile_Type(type(p_file),pscf.ParamFile)
+        super().__init__(p_file)
     
     @classmethod
     def fromFileName(cls, filename):
@@ -442,6 +445,7 @@ class PscfParam(ParamFile):
             considered.
         """
         param = self.file
+        monomer_index = core_monomer
         nMon = param.N_monomer
         if monomer_index >= nMon or monomer_index < 0:
             errstr = "Invalid Monomer index ({}) given. Must be in range (0,{})."
@@ -485,8 +489,8 @@ class PscfppParam(ParamFile):
         p_file : pscfFieldGen.pscfppFileManagers.ParamFile
             The ParamFile instance. (Treated as Read-Only by wrapper)
         """
-        self.__check_ParamFile_Type(type(p_file),pscfpp.ParamFile)
-        super().__init__(pfile)
+        self._check_ParamFile_Type(type(p_file),pscfpp.ParamFile)
+        super().__init__(p_file)
         
     @classmethod
     def fromFileName(cls, filename):
@@ -661,7 +665,6 @@ class PscfppParam(ParamFile):
         volumeFractions : numpy.ndarray
             The volume fraction of each monomer species in the system.
         """
-        raise(NotImplementedError())
         nmonomer = self.nMonomer
         nchain = self.file.Mixture.nPolymer.value()
         nsolvent = 0    # Point solvents not yet implemented in pscfpp
@@ -682,21 +685,23 @@ class PscfppParam(ParamFile):
         phiUsed = 0.0
         frac = np.zeros(nmonomer)
         # Handle Phi-specified polymers
-        for p in hasphi:
-            comp = p.composition(nmonomer)
-            phi = p.phi
-            phiUsed += phi
-            for m in range(nmonomer):
-                frac[m] += phi * comp[m]
+        if len(hasphi) > 0:
+            for p in hasphi:
+                comp = p.composition(nmonomer)
+                phi = p.phi
+                phiUsed += phi
+                for m in range(nmonomer):
+                    frac[m] += phi * comp[m]
         # Handle Mu-specified polymers
-        phiLeft = 1.0 - phiUsed
-        ntot = 0.0
-        nmon = np.zeros(nmonomer)
-        for p in hasmu:
-            ntot += p.totalLength()
-            nmon += p.monomerLengths(nmonomer)
-        for m in range(nmonomer):
-            frac[m] += phiLeft * nmon[m] / ntot
+        if len(hasmu) > 0:
+            phiLeft = 1.0 - phiUsed
+            ntot = 0.0
+            nmon = np.zeros(nmonomer)
+            for p in hasmu:
+                ntot += p.totalLength()
+                nmon += p.monomerLengths(nmonomer)
+            for m in range(nmonomer):
+                frac[m] += phiLeft * nmon[m] / ntot
         # Return Result
         return frac
     

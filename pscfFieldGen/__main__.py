@@ -5,7 +5,7 @@ from pscfFieldGen.structure import ( Lattice,
                         POSITION_TOLERANCE,
                         buildCrystal )
 from pscfFieldGen.fieldGenerators import FieldCalculator
-from pscfFieldGen.filemanagers import pscfParam, pscfppParam
+from pscfFieldGen.filemanagers import PscfParam, PscfppParam
 from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
 # Standard Library Imports
@@ -50,7 +50,7 @@ def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
     kgrid.fields = newField
     kgrid.write(kgridFileName.open(mode='x'))
 
-SOFTWARE_MAP = { "pscf" : pscfParam, "pscfpp" : pscfppParam }
+SOFTWARE_MAP = { "pscf" : PscfParam, "pscfpp" : PscfppParam }
 
 if __name__=="__main__":
     POSITION_TOLERANCE = 0.001
@@ -71,7 +71,7 @@ if __name__=="__main__":
     hasPositions = False
     
     # Set default values
-    ParamFile = pscfParam # class of parameter file can be set based on flag
+    ParamFile = None # class of parameter file can be set based on flag
     input_style = 'motif'
     outfilestring = 'rho_kgrid'
     core_monomer = 0
@@ -86,6 +86,7 @@ if __name__=="__main__":
                 if ParamFile is None:
                     raise(ValueError("Invalid software ({}) given.".format(software)))
                 hasSoftware = True
+                data = software
             elif word == 'parameter_file':
                 if not hasSoftware:
                     raise(ValueError("Keyword 'software' must appear before 'parameter_file'"))
