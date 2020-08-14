@@ -293,10 +293,17 @@ resulting in some error in the resultant positions. When values are truncated ab
 the positional tolerance, duplicate particles can be missed. _User control of 
 this tolerance can later be added_.
 
-**For blends, the parameter file must be written for the Canonical Ensemble:**
-The tool requires an explicit volume fraction composition. Thus, the blend fraction of
-each component in the system must be specified - as is required in Canonical
-calculations. Grand Canonical parameter files will cause an error.
+**For blends, handling of Grand Canonical Ensemble (or input chemical potentials) is experimental:**
+For both the Fortran and C++/Cuda versions of PSCF, this generator will handle inputs in the 
+Grand Canonical Ensemble (Fortran version) as well as any combination of *phi* and *mu*
+specified polymers (C++/Cuda version). Cases using explicit system composition (Canonical
+ensemble; *phi* specified for each species) are considered the normal case for this
+software. When molecules are specified by chemical potential (Grand Canonical; *mu* specified
+for more than one molecule), their contribution to the volume fraction of monomer species
+is calculated assuming that all Grand Canonical species are present in equal number (same
+number of moles). Reliability of this approach (particularly for mixtures with solvents or 
+significantly uneven polymer sizes) has not yet been robustly tested, and results involving
+these inputs should be carefully inspected before use.
 
 [Back to Top](#pscf-particle-phase-field-generator)
 
