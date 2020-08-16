@@ -1,4 +1,16 @@
-rm in/*
-rm out/*
-rm GeneratorTrace
-rm conversionTrace
+fieldsList=("./rho_kgrid" "./rho_rgrid" "./rho" "./omega")
+dirList=(./in/ ./out/)
+for fileRoot in ${fieldsList[@]}; do
+    for dirRoot in ${dirList[@]}; do
+        if [ -f "${dirRoot}${fileRoot}" ]; then
+            rm "${dirRoot}${fileRoot}"
+        fi
+    done
+done
+
+fileList=(./logs/generation ./logs/conversion ./logs/solution)
+for fileRoot in ${fileList[@]}; do
+    if [ -f "${fileRoot}" ]; then
+        rm "${fileRoot}"
+    fi
+done

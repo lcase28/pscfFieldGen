@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from .iotools import IO, IOException
 import numpy as np
 from pathlib import Path
+import re
 from .version import Version
 import string
 import sys
@@ -657,6 +658,10 @@ class WaveVectFieldFile(FieldFile):
     
     # overriding inherited private abstract methods
     def _readField(self):
+        # prepare regular expressions
+        fieldLineFormat = r"([-+]?[0-9.]+(?:[eE](?:[-+]|\s)?\d{1,3})?)\s*"
+        self._fieldLineExp = re.compile(fieldLineFormat)
+        # read data
         self.ngrid = self._input_vec('int', n=self.dim, comment='ngrid')
         self.fields = 1j*np.zeros((self.gridPoints,self.N_monomer))
         if not self.skipFieldFlag:
@@ -669,39 +674,25 @@ class WaveVectFieldFile(FieldFile):
     
     def _nextFieldLine(self):
         s = self.file.readline() # get next line
-        sMon = s.split(')')
+        entries = self._fieldLineExp.findall(s)
         vals = np.zeros((2,self.N_monomer))
         for i in range(self.N_monomer):
             try:
-                re, im = self._getComponents(sMon[i])
+                re = float(entries[2*i+1].strip())
+                im = float(entries[2*i+2].strip())
             except ValueError as err:
                 msg = str(err) + "Monomer {}\n".format(i)
                 raise(ValueError(msg))
-            #vals[0,i], vals[1,i] = self._getComponents(sMon[i])
-            #vals.append(self._getRealComponent(sMon[i]))
             vals[0,i] = re
             vals[1,i] = im
         retVal = vals[0,:] + 1j * vals[1,:]
         return retVal
         
-    def _getComponents(self, sbase):
-        s = sbase.strip()
-        s = s.strip('()')
-        slist = s.split(',')
-        try:
-            re = float(slist[0].strip())
-            im = float(slist[1].strip())
-        except(ValueError):
-            raise(ValueError("Error Converting string {} to float.\n".format(sbase)))
-        return re, im
-        #return float(slist[0].strip()), float(slist[1].strip())
-        
-    
     def _outputField(self):
         self._output_vec('int', 'ngrid', n=self.dim, s='R', f='A')
-        formstr = "    ({:.4E},{:.4E}) "
+        formstr = "     {:.4E} {:.4E}  "
         for i in range(self.gridPoints):
-            s = ""
+            s = "  {}".format(i)
             for j in range(self.N_monomer):
                 re = np.real(self.fields[i,j])
                 im = np.imag(self.fields[i,j])
