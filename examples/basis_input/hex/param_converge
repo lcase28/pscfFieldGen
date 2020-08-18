@@ -67,15 +67,15 @@ input_filename
 output_prefix
              ''
 max_itr             
-             500
+             100
 error_max           
-             1.0000000E-05
+             1.0000000E-08
 domain
              T
 itr_algo
-            'AM'
-N_hist
-             20
+            'NR'
+N_cut
+             61
 
 FIELD_TO_RGRID
 input_filename

@@ -44,6 +44,11 @@ python -m pscfFieldGen -f model -t > generationLog
 [ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_kgrid > conversionLog
 ```
 
+In the second line, the bracketed term (`[ pscf_pc2d  |  pscf_pc3d ]`)
+should be replaced by the proper command (either `pscf_pc2d` or `pscf_pc3d`,
+depending on the dimensionality) when executed. The bracket notation 
+is used to list the options to choose between.
+
 The first line of the script uses the traced invocation of pscfFieldGen
 to generate a KGRID field file ('in/rho_kgrid'). The traced invocation 
 (flag `-t`) causes the program to echo the input read from *model*.

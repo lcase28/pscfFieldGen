@@ -67,7 +67,7 @@ input_filename
 output_prefix
              ''
 max_itr             
-             500
+             800
 error_max           
              1.0000000E-05
 domain
