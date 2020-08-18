@@ -62,3 +62,30 @@ Available morphologies are:
  * 3-Dimensional
     * BCC Spheres (`bcc')
 
+## Monomer Selection
+
+Examples in the directory 'monomer_selection/' reverse the block fractions of some of the
+'basis_input' examples such that the second monomer, rather than the first, is the 
+minority component. These examples show how to select a monomer other than the default
+"monomer 0".
+Available morphologies are:
+
+    * 2-Dimensional
+        * hexagonally packed cylinders ('hex')
+    * 3-dimensional
+        * BCC spheres ('bcc')
+
+## Polymer Blends
+
+Examples in the directory 'polymer_blends/' show pscfFieldGen's capability to handle
+polymer blends. Each examples blends two or more diblock copolymers in the system.
+In each case, blend fractions and block fractions are chosen to allow comparison
+to examples in 'basis_input/'. Details of this balancing are given in the collection's 
+README.md file.
+Available morphologies are:
+
+    * 2-Dimensional
+        * hexagonally packed cylinders ('hex')
+    * 3-dimensional
+        * BCC spheres ('bcc')
+
