@@ -49,10 +49,38 @@ group_name
      'P m -3 n'
 
 
-KGRID_TO_RGRID
+RGRID_TO_FIELD
 input_filename
-         'rho_kgrid.in'
-output_filename
          'rho_rgrid.in'
+output_filename
+         'rho.in'
+
+RHO_TO_OMEGA
+input_filename
+        'rho.in'
+output_filename
+        'omega.in'
+
+ITERATE
+input_filename
+             'omega.in'
+output_prefix
+             ''
+max_itr             
+             500
+error_max           
+             1.0000000E-05
+domain
+             T
+itr_algo
+            'AM'
+N_hist
+             20
+
+FIELD_TO_RGRID
+input_filename
+         'rho'
+output_filename
+         'rho_rgrid'
 
 FINISH

@@ -14,7 +14,7 @@ N_block
 block_monomer  
               1              2
 block_length   
-              3.0000000E-01  7.0000000E-01
+              2.5000000E-01  7.5000000E-01
 
 COMPOSITION
 ensemble            
@@ -30,29 +30,57 @@ chi
 
 UNIT_CELL
 dim                 
-              2
+              3
 crystal_system      
-    'hexagonal'
+        'cubic'
 N_cell_param        
               1
 cell_param          
-             1.7
+             1.9
 
 DISCRETIZATION
 ngrid
-             24        24
+             36        36        36
 chain_step
              0.01
 
 BASIS
 group_name          
-            'p 6 m m'
+            'I m -3 m'
 
 
-KGRID_TO_RGRID
+RGRID_TO_FIELD
 input_filename
-         'rho_kgrid.in'
-output_filename
          'rho_rgrid.in'
+output_filename
+         'rho.in'
+
+RHO_TO_OMEGA
+input_filename
+        'rho.in'
+output_filename
+        'omega.in'
+
+ITERATE
+input_filename
+             'omega.in'
+output_prefix
+             ''
+max_itr             
+             500
+error_max           
+             1.0000000E-05
+domain
+             T
+itr_algo
+            'AM'
+N_hist
+             20
+
+FIELD_TO_RGRID
+input_filename
+         'rho'
+output_filename
+         'rho_rgrid'
 
 FINISH

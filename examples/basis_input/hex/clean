@@ -1,15 +1,16 @@
-KGRIDFILE=./rho_kgrid
-RGRIDFILE=./rho_rgrid
-CONVLOGFILE=./conversionLog
+fieldsList=(./rho_kgrid ./rho_rgrid ./rho ./omega)
+for fileRoot in ${fieldsList[@]}; do
+    if [ -f "${fileRoot}" ]; then
+        rm "${fileRoot}"
+    fi
+    if [ -f "${fileRoot}.in" ]; then
+        rm "${fileRoot}.in"
+    fi
+done
 
-if [ -f "$KGRIDFILE" ]; then
-    rm "$KGRIDFILE"
-fi
-
-if [ -f "$RGRIDFILE" ]; then
-    rm "$RGRIDFILE"
-fi
-
-if [ -f "$CONVLOGFILE" ]; then
-    rm "$CONVLOGFILE"
-fi
+fileList=(./out ./generationLog ./conversionLog ./solutionLog)
+for fileRoot in ${fileList[@]}; do
+    if [ -f "${fileRoot}" ]; then
+        rm "${fileRoot}"
+    fi
+done

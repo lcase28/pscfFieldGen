@@ -48,10 +48,11 @@ BASIS
 group_name          
             'I m -3 m'
 
+
 KGRID_TO_RGRID
-input_filename      
-             'rho_kgrid'
-output_filename           
-             'rho_rgrid'
+input_filename
+         'rho_kgrid.in'
+output_filename
+         'rho_rgrid.in'
 
 FINISH
