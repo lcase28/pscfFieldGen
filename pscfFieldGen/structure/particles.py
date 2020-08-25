@@ -82,7 +82,7 @@ class Circle2DForm(ParticleForm):
     """ Form factor for 2D circles """
     
     @staticmethod
-    @numba.jit("double(double,double)")
+    @numba.jit("double(double,double)",forceobj=True)
     def formFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
         """ 
         Returns the form factor amplitude for a 2D circular particle.
@@ -103,7 +103,9 @@ class Circle2DForm(ParticleForm):
         """
         R = np.sqrt( zero_q_magnitude / np.pi )
         qR = qNorm * R
-        ff = (2.0 / (qR**3)) * (qR - j1(2.0*qR))
+        bessarg = 2.0 * qR
+        bess = j1(bessarg)
+        ff = (2.0 / (qR**3)) * (qR - bess)
         ff = zero_q_magnitude*ff
         return ff
 

@@ -396,23 +396,34 @@ class UniformParticleField(FieldCalculatorBase):
         lattice = self.chooseLattice(lattice)
         qnorms = self.getQNorm(ngrid,lattice)
         form = self.partForm.formFactorAmplitude
-        form(0.0,1.0)
+        formFact = self.__getFormFactors(qnorms,particleVol,form)
         
-        args = [nspecies, frac, nbrill, brill, compSums, qnorms, vol, particleVol, form, interfaceWidth, coreindex]
+        args = [nspecies, frac, nbrill,brill, compSums, qnorms, vol, formFact, interfaceWidth, coreindex]
         kgrid = self.__kgrid_calc(*args)
         return kgrid
+    
+    @staticmethod
+    @numba.jit(forceobj=True)
+    def __getFormFactors(qnorms,particleVol,form):
+        out = np.zeros_like(qnorms)
+        n = len(qnorms)
+        for t in range(n):
+            if t == 0:
+                out[t] = 0.0
+            else:
+                out[t] = form(qnorms[t], particleVol)
+        return out
         
     @staticmethod
-    @numba.jit
+    @numba.njit
     def __kgrid_calc(   nspecies, 
                         frac, 
                         nbrill, 
-                        brill, 
+                        brill,
                         compSums, 
                         qnorms, 
                         vol, 
-                        particleVol, 
-                        particleForm,
+                        formFact,
                         interfaceWidth,
                         coreindex ):
         rho = 1j*np.zeros((nbrill,nspecies))
@@ -424,7 +435,7 @@ class UniformParticleField(FieldCalculatorBase):
                 # 0-th wave-vector -- corresponds to volume fractions
                 rho[t,:] = frac[:] 
             else:
-                ff = particleForm(q_norm, particleVol)
+                ff = formFact[t] #particleForm(q_norm, particleVol)
                 fsmear = np.exp(-( (interfaceWidth**2) * q_norm**2) / 2.0)
                 rho[t, coreindex] = compSum * (1/vol) * ff * fsmear
                 rhoTemp = -rho[t, coreindex] / (1 - frac[coreindex]) #np.sum(frac[1:])
