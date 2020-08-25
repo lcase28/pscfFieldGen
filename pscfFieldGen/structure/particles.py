@@ -8,7 +8,7 @@ from pscfFieldGen.structure.lattice import Lattice
 from abc import ABC, abstractmethod
 from copy import deepcopy
 import numpy as np
-import scipy as sp
+from scipy.special import j1
 
 class ParticleForm(ABC):
     """
@@ -123,7 +123,7 @@ class Circle2DForm(ParticleForm):
         
         qR = qNorm * R
         #ff = ( 2.0 / (qR**2) ) * ( 1.0 - (sp.special.j1(2.0*qR) / qR))
-        ff = (2.0 / (qR**3)) * (qR - sp.special.j1(2.0*qR))
+        ff = (2.0 / (qR**3)) * (qR - j1(2.0*qR))
         ff = zero_q_magnitude*ff
         f_smear = np.exp( -(smear**2 * qR**2 / 2.0) )
         return ff, f_smear

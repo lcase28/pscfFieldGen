@@ -4,14 +4,8 @@ from pscfFieldGen.structure import ( Lattice,
                         ScatteringParticle,
                         POSITION_TOLERANCE,
                         buildCrystal )
-#from fieldGeneration.crystal_structs.crystalStructs.lattice import Lattice
-#from fieldGeneration.crystal_structs.crystalStructs.crystal import ParticleBase
 from pscfFieldGen.fieldGenerators import FieldCalculator
-from pscfFieldGen.pscfFileManagers import ( expandLatticeParameters, 
-                                            getInterfaceWidth, 
-                                            getMonomerFractions, 
-                                            ParamFile, 
-                                            WaveVectFieldFile )
+from pscfFieldGen.filemanagers import PscfParam, PscfppParam
 from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
 # Standard Library Imports
@@ -32,7 +26,7 @@ def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
     
     Parameters
     ----------
-    param : pscfFileManagers.paramfile.ParamFile
+    param : pscfFieldGen.filemanagers.ParamFile
         The param file being used with the field
     calculator : fieldGenerators.FieldCalculator
         The FieldCalculator used to do the field calculation.
@@ -46,23 +40,17 @@ def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
         If None, a new WaveVectFieldFile is instantiated to match
         the param file.
     """
-    monFrac = getMonomerFractions(param)
-    interface = getInterfaceWidth(param,core)
+    monFrac = param.getMonomerFractions()
+    interface = param.getInterfaceWidth(core)
     ngrid = param.ngrid
     newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface, coreindex=core)
     # Create clean field file if needed.
     if kgrid is None:
-        kgrid = WaveVectFieldFile()
-        kgrid.dim = param.dim
-        kgrid.crystal_system = param.crystal_system
-        kgrid.N_cell_param = param.N_cell_param
-        kgrid.cell_param = param.cell_param
-        kgrid.group_name = param.group_name
-        kgrid.N_monomer = param.N_monomer
-        kgrid.ngrid = ngrid
+        kgrid = param.cleanFieldFile()
     kgrid.fields = newField
     kgrid.write(kgridFileName.open(mode='x'))
-    
+
+SOFTWARE_MAP = { "pscf" : PscfParam, "pscfpp" : PscfppParam }
 
 if __name__=="__main__":
     POSITION_TOLERANCE = 0.001
@@ -74,6 +62,7 @@ if __name__=="__main__":
     filepath = Path(args.file)
     
     # Set initial flags
+    hasSoftware = False
     hasParam = False
     hasStyle = False
     hasCore = False
@@ -82,6 +71,7 @@ if __name__=="__main__":
     hasPositions = False
     
     # Set default values
+    ParamFile = None # class of parameter file can be set based on flag
     input_style = 'motif'
     outfilestring = 'rho_kgrid'
     core_monomer = 0
@@ -90,9 +80,18 @@ if __name__=="__main__":
     with filepath.open(mode='r') as cmdFile:
         words = wordsGenerator(cmdFile)
         for word in words:
-            if word == 'parameter_file':
+            if word == 'software':
+                software = next(words)
+                ParamFile = SOFTWARE_MAP.get(software,None)
+                if ParamFile is None:
+                    raise(ValueError("Invalid software ({}) given.".format(software)))
+                hasSoftware = True
+                data = software
+            elif word == 'parameter_file':
+                if not hasSoftware:
+                    raise(ValueError("Keyword 'software' must appear before 'parameter_file'"))
                 filename = next(words)
-                param = ParamFile(filename)
+                param = ParamFile.fromFileName(filename)
                 hasParam = True
                 data = filename
             elif word == 'coord_input_style':
@@ -142,6 +141,8 @@ if __name__=="__main__":
                 print('{}\n\t\t{}'.format(word, data))
     
     # Check for presence of required data
+    if not hasSoftware:
+        raise(ValueError("Input keyword 'software' must be specified"))
     if not hasParam:
         raise(ValueError("Input keyword 'parameter_file' must be specified"))
     if nparticle <= 0:
@@ -160,7 +161,7 @@ if __name__=="__main__":
     # Create Lattice Object
     if args.trace:
         print("\nCreating System Lattice")
-    latticeParams = expandLatticeParameters(param)
+    latticeParams = param.latticeParameters
     dim = param.dim
     lattice = Lattice.latticeFromParameters(dim, **latticeParams)
     if args.trace:
@@ -187,7 +188,7 @@ if __name__=="__main__":
     # Generate File
     if args.trace:
         print("\nGenerating Field File")
-    generate_field_file(param, calculator, outFile)
+    generate_field_file(param, calculator, outFile, core=core_monomer)
     if args.trace:
         print("\nField Generation Complete")
             

@@ -1,8 +1,0 @@
-KGRID_TO_RGRID  in/rho_kgrid    in/rho_rgrid
-RGRID_TO_BASIS  in/rho_rgrid    in/rho
-RHO_TO_OMEGA    in/rho          in/omega
-ITERATE          
-WRITE_W_BASIS   out/omega
-WRITE_C_RGRID   out/rho_rgrid
-FINISH
-

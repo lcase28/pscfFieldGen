@@ -1,4 +1,5 @@
-parameter_file  param_kgrid
+software        pscfpp
+parameter_file  param
 output_file     in/rho_kgrid
 
 core_monomer    0

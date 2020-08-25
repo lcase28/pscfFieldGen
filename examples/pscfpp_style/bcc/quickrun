@@ -1,0 +1,2 @@
+python -m pscfFieldGen -f model -t > logs/generation
+pscf_pc3d -e -p param -c command_kgrid > logs/conversion
