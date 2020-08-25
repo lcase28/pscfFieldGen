@@ -40,8 +40,8 @@ The script acts as a shorthand for the following
 commands, which could be used directly
 
 ```
-python -m pscfFieldGen -f model -t > generationLog
-[ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_kgrid > conversionLog
+python -m pscfFieldGen -f model -t > logs/generation
+[ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_kgrid > logs/conversion
 ```
 
 In the second line, the bracketed term (`[ pscf_pc2d  |  pscf_pc3d ]`)
@@ -54,8 +54,9 @@ to generate a KGRID field file ('in/rho_kgrid'). The traced invocation
 (flag `-t`) causes the program to echo the input read from *model*.
 After echoing this data, the program subsequently prints the details of
 the Lattice it will use, the crystal structure it will use, and output
-notice of key steps in its calculation. The addition of ` > generationLog`
-at the end of the command redirects this output to a file 'generationLog'.
+notice of key steps in its calculation. The addition of ` > logs/generation`
+at the end of the command redirects this output to a file 'generation'
+in the sub-directory 'logs' within the example's root directory.
 
 The second line executes PSCF using the parameter file 'param' and
 command file 'command_kgrid'.
@@ -63,7 +64,7 @@ This operation convers the KGRID field file data in 'in/rho_kgrid' to
 RGRID field file format as the file 'in/rho_rgrid'. This file can be used 
 with the visualizer to check the structure of the resulting concentration
 field. The output from this invocation of pscf is similarly redirected
-into a log file called `conversionLog`.
+into a log file called `conversion` within the 'logs/' sub-directory.
 
 ### Full Run
 
@@ -80,9 +81,9 @@ on the command line from within the example's directory.
 This script is equivallent to the following commands
 
 ```
-python -m pscfFieldGen -f model -t > generationLog
-[ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_kgrid > conversionLog
-[ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_converge > conversionLog
+python -m pscfFieldGen -f model -t > logs/generation
+[ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_kgrid > logs/conversion
+[ pscf_pc2d  |  pscf_pc3d ] -e -p param -c command_converge > logs/solution
 ```
 
 The first two lines in this execution are identical to those 
