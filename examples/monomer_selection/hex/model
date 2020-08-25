@@ -1,0 +1,12 @@
+software        pscf
+parameter_file  param_kgrid
+output_file     rho_kgrid.in
+
+core_monomer    1
+
+coord_input_style   basis
+N_particles         1
+particle_positions   
+    0       0
+finish
+

@@ -1,3 +1,0 @@
-./clean
-python -m pscf_field_generator -f model
-pscf_pc3d -e -p param -c command_long

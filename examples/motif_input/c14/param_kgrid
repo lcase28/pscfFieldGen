@@ -48,10 +48,11 @@ BASIS
 group_name          
             'P 63/m m c'
 
+
 KGRID_TO_RGRID
 input_filename
-             'rho_kgrid'
+         'rho_kgrid.in'
 output_filename
-             'rho_rgrid'
+         'rho_rgrid.in'
 
 FINISH

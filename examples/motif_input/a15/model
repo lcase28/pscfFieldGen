@@ -1,5 +1,6 @@
+software            pscf
 parameter_file      param_kgrid
-output_file         rho_kgrid
+output_file         rho_kgrid.in
 
 core_monomer        0
 
