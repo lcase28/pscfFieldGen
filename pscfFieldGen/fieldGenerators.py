@@ -5,6 +5,8 @@ from pscfFieldGen.structure import ( Lattice,
                                     SpaceGroup )
 from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
+from abc import ABC, abstractmethod
+import numba
 import numpy as np
 import scipy as sp
 import pathlib
@@ -12,54 +14,17 @@ import itertools
 import re
 from enum import Enum
 
-class FieldCalculator(object):
-    """ Generator class for 3D k-grid density fields of n-monomer systems """
+class FieldCalculatorBase(ABC):
+    """ Base class for varieties of FieldCalculator Styles.
     
-    # sentinel of -1 indicates value must be dynamic
-    readCounts =   {"dim" : 1,
-                    "lattice" : -1,
-                    "coord_input_style" : 1,
-                    "N_particles" : 1,
-                    "particlePositions" : -1,
-                    "sigma_smear" : 1}
-    
-    __defaultParams = { "a" : 1, "b" : 1, "c" : 1, \
-                        "alpha" : 90, "beta" : 90, "gamma" : 90 }
-    
-    class FieldRecord(object):
-        """ 
-            Helper class to cache reusable portions of previous 
-            calculations in the instance of same ngrid.
-        """
-        def __init__(self, **kwargs):
-            """ Generate an empty record. """
-            self.brillouin = []
-            self.complex_sums = []
-            self.qNorm = []
-            self.nEntry = 0
+    """
+    def __init__(self, crystal):
+        """ Initialize a new FieldCalculator.
         
-        def add(self, brillouin, complex_sum, qNorm):
-            self.brillouin.append(brillouin)
-            self.complex_sums.append(complex_sum)
-            self.qNorm.append(qNorm)
-            self.nEntry += 1
-            
-        def __len__(self):
-            return self.nEntry
-            
-        def records(self):
-            if self.nEntry == 0:
-                pass
-            else:
-                for n in range(self.nEntry):
-                    b = self.brillouin[n]
-                    c = self.complex_sums[n]
-                    q = self.qNorm[n]
-                    yield (n, b, c, q)
-        
-    def __init__(self, crystal, **kwargs):
-        """
-        Initialize a new FieldGenerator.
+        The crystal structure is input as a derivative of CrystalBase.
+        All deriving classes should plan to work within the CrystalBase
+        structure framework, but can have extensions to the crystal to 
+        enable any special behavior.
         
         Parameters
         ----------
@@ -69,119 +34,398 @@ class FieldCalculator(object):
         """
         self.crystal = crystal
         self.dim = self.crystal.dim
+        self.nparticles = self.crystal.n_particles
         self.lattice = self.crystal.lattice
         self.reciprocal_lattice = self.lattice.reciprocal
-        self.partForm = self.crystal.particles[0].formFactor
-        self.nparticles = self.crystal.n_particles
-        self.smear = kwargs.get("sigma_smear", 0.0)
-        # Cache pre-calculated results which can be recycled whenever ngrid is same
-        self._cached_results = dict()
+        self.__brillouin_cache = dict()
+        self.__kgrid_cache = dict()
+        self.__nstep_cache = dict()
         super().__init__()
     
-    @classmethod
-    def from_file(cls, fname):
+    def seedCalculator(self,ngrid,lattice=None):
+        """ Verify that cached values are available for given ngrid and lattice.
+        
+        Field Calculators will cache reusable values from the calculation.
+        Since each calculator has a fixed crystal structure, these cached values
+        are determined by ngrid and the lattice. This method will check for
+        cached results relevant to the given ngrid and lattice parameters.
+        If they are available, no more work will be done. If they are not, 
+        results will be calculated and cached.
+        
+        Derived classes should override and include a call to super().seedCalculator
+        
+        When overriding, values should be cached according to the minimum
+        parameters making them unique. For example, Brillouin zone wave-vectors
+        depend only on the ngrid, not on lattice; thus only ngrid should be
+        used to check for their value.
+        
+        Parameters
+        ----------
+        ngrid : array-like
+            The number of grid points along each lattice dimension.
+        lattice : pscfFieldGen.structure.Lattice
+            The lattice representation.
+        
+        Returns
+        -------
+        ngrid : array-like
+            Echo's the ngrid used for seeding.
+        lattice : pscfFieldGen.structure.lattice
+            Returns the lattice that was actually used for the seeding.
         """
-            Return a FieldCalculator instance  based on the file "fname"
-            
-            Parameters
-            ----------
-            fname : pathlib.Path
-                Path to file being used to instantiate.
-        """
-        #print("Reading Input File")
-        with fname.open(mode='r') as f:
-            kwargs = {}
-            words = wordsGenerator(f)
-            for word in words:
-                key = word # Next word should be acceptable keyword
-                readCount = cls.readCounts.get(key, None)
-                if readCount is not None:
-                    if readCount == 1:
-                        data = next(words) #.next()
-                        try:
-                            data = str_to_num(data)
-                        except(ValueError, TypeError):
-                            pass
-                    elif readCount == -1:
-                        # sentinel indicates special case
-                        if key == "lattice":
-                            dim = kwargs.get("dim")
-                            if dim is not None:
-                                if dim == 1:
-                                    nconst = 1
-                                    raise(NotImplementedError("1-dimensional case not implemented"))
-                                elif dim == 2:
-                                    nconst = 3
-                                    constNames = ["a", "b", "gamma"]
-                                    #raise(NotImplementedError("2-dimensional case not implemented"))
-                                elif dim == 3:
-                                    nconst = 6
-                                    constNames = ["a","b","c","alpha","beta","gamma"]
-                                else:
-                                    raise(ValueError("dim may not exceed 3"))
-                                constants = [str_to_num(next(words)) for i in range(nconst)]
-                                const = dict(zip(constNames,constants))
-                                #print("Constants: ",constants)
-                                data = Lattice.latticeFromParameters(dim, **const)
-                                #print("Lattice: ",data)
-                            else:
-                                raise(IOError("Dim must be specified before lattice constants"))
-                        elif key == "particlePositions":
-                            dim = kwargs.get("dim")
-                            if dim is None:
-                                raise(IOError("dim must be specified before particle positions"))
-                            nparticles = kwargs.get("N_particles")
-                            if nparticles is None:
-                                raise(IOError("N_particles must be specified before particles positions"))
-                            data = np.array([str_to_num(next(words)) for i in range(dim * nparticles)])
-                            data = np.reshape(data, (nparticles, dim))
-                        else:
-                            raise(NotImplementedError("{} has not been fully implemented as a dynamic read variable".format(key)))
-                    else:
-                        # implies either invalid number readCount
-                        # or readCount = 0 ==> ignore entry
-                        pass
-                else:
-                    raise(ValueError("{} is not a valid keyword for FieldCalculator".format(key)))
-                kwargs.update([(key, data)])
-            return cls(**kwargs)
+        lattice = self.chooseLattice(lattice)
+        self.getBrillouinArray(ngrid)
+        return ngrid, lattice
     
-    def to_kgrid(self, frac, ngrid,interfaceWidth=None, coreindex=0):
-        """
-            Return the reciprocal space grid of densities.
-            
-            Parameters
-            ----------
-            frac : numerical, array-like
-                volume fractions of all monomer types. Sum of all values = 1.
-                Value at index 0 represents the "core" or particle-forming monomer.
-                And must also be monomer 1 by PSCF indications.
-            ngrid : int, array-like
-                The number of grid points in each (real-space) direction.
+    def chooseLattice(self,lat):
+        """ Choose either default or override lattice and reciprocal lattice. """
+        if lat is None:
+            return self.lattice
+        else:
+            raise(NotImplementedError("Lattice Override checks have not been implemented"))
+        
+    def getKgrid(self,ngrid):
+        key = str(tuple(ngrid))
+        if key in self.__kgrid_cache:
+            kgrid = self.__kgrid_cache.get(key)
+        else:
+            ngrid = np.array(ngrid)
+            # Shift grid for k-grid
+            kgrid = np.zeros_like(ngrid)
+            for (i,x) in enumerate(ngrid):
+                if i == 0:
+                    kgrid[i] = (x/2) + 1
+                else:
+                    kgrid[i] = x
+            self.__kgrid_cache.update({key:kgrid})
+        return kgrid
+    
+    def getNumKgridPoints(self,ngrid):
+        """ Calculate the total number of points in reciprocal grid. """
+        key = str(tuple(ngrid))
+        if key in self.__nstep_cache:
+            record = self.__nstep_cache.get(key)
+        else:
+            kgrid = self.getKgrid(ngrid)
+            record = np.prod(kgrid)
+            self.__nstep_cache.update({key:record})
+        return record
+    
+    def getBrillouinArray(self,ngrid):
+        """ Determine the wavevectors in the first brillouin zone.
+        
+        From the ngrid real-space discretization, determine the full
+        set of wave-vectors shifted to the first brillouin zone.
+        Return the result as a numpy array where each row is a wave-vector.
+        
+        Brillouin vector sets are stored after initial generation to be
+        available for repeat calculations. If prior results are available,
+        the same array is returned.
+        
+        Parameters
+        ----------
+        ngrid : array-like
+            The number of grid points along each lattice vector in the
+            real-space discretization.
+        
+        Returns
+        -------
+        brillouin : numpy.ndarray (Treat as Read-only)
+            The array of wave-vectors.
         """
         key = str(tuple(ngrid))
-        if key in self._cached_results:
-            record = self._cached_results.get(key)
+        if key in self.__brillouin_cache:
+            record = self.__brillouin_cache.get(key)
         else:
-            record = self._generateFieldRecord(ngrid)
-            self._cached_results.update({key: record})
+            kgrid = self.getKgrid(ngrid)
+            nvect = self.getNumKgridPoints(ngrid)
+            ngrid = np.array(ngrid)
+            record = FieldCalculatorBase.__generate_brillouin(ngrid,kgrid,nvect)
+            self.__brillouin_cache.update({key:record})
+        return record
+    
+    @staticmethod
+    @numba.njit
+    def __generate_brillouin(ngrid,kgrid,nvect):
+        """ Generate brillouin zone wave-vectors """
+        dim = len(ngrid)
+        dshift = dim - 1  #used in aliasing
+        # Define aliasing method
+        def miller_to_brillouin(G):
+            out = np.zeros_like(G,dtype=np.int64)
+            out[0] = G[0]
+            for i in [1,2]:
+                if dshift >= i:
+                    if G[i] > ngrid[i]/2:
+                        out[i] = G[i] - ngrid[i]
+                    else:
+                        out[i] = G[i]
+            return out
+        # Iterate
+        brillouin = np.zeros((nvect,dim),dtype=np.int64)
+        G = np.zeros_like(kgrid,dtype=np.int64)
+        n = 0
+        if dim == 3:
+            for i in range(kgrid[0]):
+                for j in range(kgrid[1]):
+                    for k in range(kgrid[2]):
+                        G[0] = i
+                        G[1] = j
+                        G[2] = k
+                        brillouin[n,:] = miller_to_brillouin(G)
+                        n = n + 1
+        elif dim == 2:
+            for i in range(kgrid[0]):
+                for j in range(kgrid[1]):
+                    G[0] = i
+                    G[1] = j
+                    brillouin[n,:] = miller_to_brillouin(G)
+                    n = n + 1
+        else:
+            raise(ValueError("ngrid must match 2 or 3 dimensional system"))
+        return brillouin
+    
+    @abstractmethod
+    def to_kgrid(self, frac, ngrid, interfaceWidth, coreindex=0, lattice=None):
+        """
+        Return the reciprocal space grid of monomer volume fractions
         
+        Parameters
+        ----------
+        frac : numerical, array-like
+            volume fractions of all monomer types. Sum of all values = 1.
+            Value at index 0 represents the "core" or particle-forming monomer.
+            And must also be monomer 1 by PSCF indications.
+        ngrid : int, array-like
+            The number of grid points in each (real-space) direction.
+        interfaceWidth : float
+            An estimated width of the interface for smearing particle edges.
+        coreindex : int (optional)
+            The monomer id number for the monomer taken to be in the core of the 
+            particles. Default is 0.
+        lattice : pscfFieldGen.structure.Lattice (optional)
+            An overloading Lattice to use in place of the default. Must match the type
+            of the default lattice.
+        
+        Returns
+        -------
+        rho : numpy.ndarray (complex-valued)
+            An array of fourier coefficients for the monomer volume fraction field.
+            Should contain a row for each fourier space grid point, and a column for
+            each monomer.
+        """
+        pass
+    
+class UniformParticleField(FieldCalculatorBase):
+    """ Calculates density fields assuming all particles are equal size. """
+    
+    def __init__(self, crystal):
+        """
+        Initialize a new FieldGenerator.
+        
+        Parameters
+        ----------
+        crystal : pscfFieldGen.structure.CrystalBase or CrystalMotif
+            The crystal structure the calculator is supposed to produce
+            fields for.
+        """
+        super().__init__(crystal)
+        self.partForm = self.crystal.particles[0].formFactor
+        self.__complexSum_cache = dict()
+        self.__qNorm_cache = dict()
+    
+    def seedCalculator(self,ngrid,lattice=None):
+        """ Verify that cached values are available for given ngrid and lattice.
+        
+        Field Calculators will cache reusable values from the calculation.
+        Since each calculator has a fixed crystal structure, these cached values
+        are determined by ngrid and the lattice. This method will check for
+        cached results relevant to the given ngrid and lattice parameters.
+        If they are available, no more work will be done. If they are not, 
+        results will be calculated and cached.
+        
+        Derived classes should override and include a call to super().seedCalculator
+        
+        When overriding, values should be cached according to the minimum
+        parameters making them unique. For example, Brillouin zone wave-vectors
+        depend only on the ngrid, not on lattice; thus only ngrid should be
+        used to check for their value.
+        
+        Parameters
+        ----------
+        ngrid : array-like
+            The number of grid points along each lattice dimension.
+        lattice : pscfFieldGen.structure.Lattice
+            The lattice representation.
+        
+        Returns
+        -------
+        ngrid : array-like
+            Echo's the ngrid used for seeding.
+        lattice : pscfFieldGen.structure.lattice
+            Returns the lattice that was actually used for the seeding.
+        """
+        ngrid, lattice = super().seedCalculator(ngrid,lattice)
+        self.getComplexSum(ngrid)
+        self.getQNorm(ngrid,self.lattice,True)
+        return ngrid, self.lattice
+        
+    def getComplexSum(self,ngrid):
+        """ Determine the complexSum values.
+        
+        The values returned represent sum_{particles}(exp(iq*R_{j})) for
+        each q.
+        
+        Parameters
+        ----------
+        ngrid : array-like
+            The number of grid points along each lattice vector in the
+            real-space discretization.
+        
+        Returns
+        -------
+        complexSum : numpy.ndarray (Treat as Read-only)
+            The array of partial fourier coefficients.
+        """
+        key = str(tuple(ngrid))
+        if key in self.__complexSum_cache:
+            record = self.__complexSum_cache.get(key)
+        else:
+            nbrill = self.getNumKgridPoints(ngrid)
+            brill = np.asarray(self.getBrillouinArray(ngrid), dtype=np.float64)
+            npos = self.nparticles
+            pos = self.getPositionArray()
+            record = UniformParticleField.__calculate_sums(nbrill,brill,npos,pos)
+            self.__complexSum_cache.update({key:record})
+        return record
+    
+    def getQNorm(self,ngrid,lat,holdValue=False):
+        """ Determine the magnitude of wave-vectors.
+        
+        Parameters
+        ----------
+        ngrid : array-like
+            The number of grid points along each lattice vector in the
+            real-space discretization.
+        lattice : pscfFieldGen.structure.Lattice
+            The lattice to be used to calculate the magnitude.
+        
+        Returns
+        -------
+        qNorm : numpy.ndarray (Treat as Read-only)
+            Wave-Vector Magnitudes.
+        """
+        key = str(tuple(ngrid))
+        key += str(tuple(lat.latticeParameters))
+        if key in self.__complexSum_cache:
+            record = self.__complexSum_cache.get(key)
+        else:
+            nbrill = self.getNumKgridPoints(ngrid)
+            brill = np.asarray(self.getBrillouinArray(ngrid), dtype=np.float64)
+            #record = UniformParticleField.__calculate_qnorm(nbrill,brill,lattice.reciprocal)
+            record = UniformParticleField.__calculate_qnorm_metTen(nbrill,brill,lat.reciprocal.metricTensor)
+            if holdValue:
+                self.__complexSum_cache.update({key:record})
+        return record
+    
+    def getPositionArray(self):
+        pos = np.zeros((self.nparticles,self.dim))
+        n = 0
+        for r in self.crystal.particlePositions():
+            pos[n,:] = r
+            n += 1
+        return pos
+    
+    @staticmethod
+    @numba.njit
+    def __calculate_sums(nbrill,brill,npos,pos):
+        out = 1j*np.zeros(nbrill)
+        for b in range(nbrill):
+            R = 0
+            I = 0
+            q = brill[b,:]
+            for p in range(npos):
+                r = pos[p,:]
+                qr = 2 * np.pi * np.dot(q,r)
+                R = R + np.cos(qr)
+                I = I + np.sin(qr)
+            out[b] = R + 1j*I
+        return out
+    
+    ## TODO: Make Lattice Class compatible with numba.jit
+    @staticmethod
+    @numba.njit
+    def __calculate_qnorm(nbrill, brill, lattice):
+        out = np.zeros(nbrill)
+        for i in range(nbrill):
+            q = brill[i,:]
+            out[i] = lattice.vectorNorm(q)
+        return out
+    
+    @staticmethod
+    @numba.njit
+    def __calculate_qnorm_metTen(nbrill, brill, metTen):
+        # Temporary workaround until lattice can be directly interfaced from jit
+        out = np.zeros(nbrill)
+        for i in range(nbrill):
+            q = brill[i,:]
+            out[i] = np.sqrt( np.dot( q, np.dot( metTen, q ) ) )
+        return out
+    
+    def to_kgrid(self, frac, ngrid,interfaceWidth=None, coreindex=0,lattice=None):
+        """
+        Return the reciprocal space grid of densities.
+        
+        Parameters
+        ----------
+        frac : numerical, array-like
+            volume fractions of all monomer types. Sum of all values = 1.
+            Value at index 0 represents the "core" or particle-forming monomer.
+            And must also be monomer 1 by PSCF indications.
+        ngrid : int, array-like
+            The number of grid points in each (real-space) direction.
+        """
         frac = np.array(frac)
         nspecies = frac.size
-        nwaves = len(record)
-        rho = 1j*np.zeros((nwaves, nspecies))
         vol = self.lattice.volume
         particleVol = frac[coreindex] * vol / self.nparticles
         
-        # primary loop for n-dimensional generation
-        for (t, brillouin, compSum, q_norm) in record.records():
+        nbrill = self.getNumKgridPoints(ngrid)
+        brill = self.getBrillouinArray(ngrid)
+        compSums = self.getComplexSum(ngrid)
+        lattice = self.chooseLattice(lattice)
+        qnorms = self.getQNorm(ngrid,lattice)
+        form = self.partForm.formFactorAmplitude
+        form(0.0,1.0)
+        
+        args = [nspecies, frac, nbrill, brill, compSums, qnorms, vol, particleVol, form, interfaceWidth, coreindex]
+        kgrid = self.__kgrid_calc(*args)
+        return kgrid
+        
+    @staticmethod
+    @numba.jit
+    def __kgrid_calc(   nspecies, 
+                        frac, 
+                        nbrill, 
+                        brill, 
+                        compSums, 
+                        qnorms, 
+                        vol, 
+                        particleVol, 
+                        particleForm,
+                        interfaceWidth,
+                        coreindex ):
+        rho = 1j*np.zeros((nbrill,nspecies))
+        for t in range(nbrill):
+            brillouin = brill[t,:]
+            compSum = compSums[t]
+            q_norm = qnorms[t]
             if t == 0: 
                 # 0-th wave-vector -- corresponds to volume fractions
                 rho[t,:] = frac[:] 
             else:
-                ff, fsmear = self.partForm.formFactorAmplitude(q_norm, particleVol, smear = self.smear)
-                if interfaceWidth is not None:
-                    fsmear = np.exp(-( (interfaceWidth**2) * q_norm**2) / 2.0)
+                ff = particleForm(q_norm, particleVol)
+                fsmear = np.exp(-( (interfaceWidth**2) * q_norm**2) / 2.0)
                 rho[t, coreindex] = compSum * (1/vol) * ff * fsmear
                 rhoTemp = -rho[t, coreindex] / (1 - frac[coreindex]) #np.sum(frac[1:])
                 for i in range(nspecies):
@@ -191,83 +435,4 @@ class FieldCalculator(object):
                     if r == -0.0:
                         rho[t,i] = 0.0
         return rho
-    
-    def _generateFieldRecord(self, ngrid):
-        """ Populate and return a FieldRecord object """
-        f = self.__class__.FieldRecord()
-        ngrid = np.array(ngrid)
-        # Shift grid for k-grid
-        kgrid = np.zeros_like(ngrid)
-        for (i,x) in enumerate(ngrid):
-            if i == 0:
-                kgrid[i] = x/2
-            else:
-                kgrid[i] = x - 1
-        for G in itertools.product(*[range(x+1) for x in kgrid]):
-            # G is wave-vector in n-dimensions.
-            G = np.array(G) #convert tuple to array
-            brillouin = self.miller_to_brillouin(G, ngrid)
-            if np.array_equiv(brillouin, np.zeros_like(brillouin)):
-                # 0-th wave-vector -- corresponds to volume fractions
-                # set all but brillouin to None to ensure that, in event of
-                # logical errors regarding use of FieldRecord, run will be
-                # terminated with runtime error.
-                # TODO: clean up handling of 0th wave-vector.
-                f.add(brillouin,None,None)
-            else:
-                # sum of wave-vector dot particle positions
-                R, I = self.sum_ff(brillouin)
-                compsum = R + 1j*I
-                q_norm = 2 * np.pi * self.reciprocal_lattice.vectorNorm(brillouin)
-                f.add(brillouin,compsum,q_norm)
-        return f
-                
-    def sum_ff(self, q):
-        """
-        Returns real and imaginary components of 
-        
-        .. math::
-        
-            $$\sum_{n=1}^{N_particles} exp{i\mathbf{q}\dot\mathbf{r}_{n}}$$
-        
-        Where :math:$\mathbf{r}_{n}$ is the position of particle :math:$n$
-        
-        Parameters
-        ----------
-        q : array-like
-            Reciprocal space indices (first brillouin zone wave vector).
-        
-        Returns
-        -------
-        R : real, floating point
-            Real component of sum(exp(i * (q dot r)))
-        I : real, floating point
-            Imaginary component of sum(exp(i * (q dot r)))
-        """
-        R = 0
-        I = 0
-        for r in self.crystal.particlePositions():
-            # By definition of reciprocal space lattice,
-            #   dot product of q (recip) and r (real) 
-            #   calculated same as normal (b/c a_i dot a*_j = delta_ij )
-            qR = 2 * np.pi * np.dot(q, r) #self.particles[i,:])
-            R = R + np.cos(qR)
-            I = I + np.sin(qR)
-        
-        return R, I
-    
-    def miller_to_brillouin(self, G, grid):
-        """
-        Convert miller indices to first brillouin zone (Aliasing)
-        """
-        out = np.zeros_like(G, dtype=int)
-        out[0] = G[0]
-        dim = self.dim-1
-        for i in [1,2]:
-            if dim >= i:
-                if G[i] > grid[i]/2:
-                    out[i] = G[i] - grid[i]
-                else:
-                    out[i] = G[i]
-        return out
-    
+

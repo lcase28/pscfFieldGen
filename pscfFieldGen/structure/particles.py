@@ -7,6 +7,7 @@ from pscfFieldGen.structure.lattice import Lattice
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
+import numba
 import numpy as np
 from scipy.special import j1
 
@@ -15,9 +16,9 @@ class ParticleForm(ABC):
     Abstract base for classes representing particle form factors.
     """
     
-    @classmethod
+    @staticmethod
     @abstractmethod
-    def formFactorAmplitude(cls, qNorm = 0, zero_q_magnitude = 1, **kwargs):
+    def formFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
         """ 
         Returns the form factor amplitude for the particle.
         
@@ -52,8 +53,9 @@ class ParticleForm(ABC):
 class SphereForm(ParticleForm):
     """ Sphere Form Factor """
     
-    @classmethod
-    def formFactorAmplitude(cls, qNorm = 0, zero_q_magnitude = 1, **kwargs):
+    @staticmethod
+    @numba.njit("double(double,double)")
+    def formFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
         """ 
         Returns the form factor amplitude for a spherical particle.
         
@@ -65,34 +67,23 @@ class SphereForm(ParticleForm):
             If R not specified, this is taken to be the volume
             of the sphere. Otherwise, it is simply treated as
             a scaling factor.
-        R : scalar (optional, keyworded)
-            The radius of the sphere.
-        smear : scalar (optional, keyworded)
-            The Gaussian Smearing factor, normalized to sphere radius.
         
         Returns
         -------
         f_of_q : scalar
             The form factor at q.
-        f_smear : scalar
-            The gaussian smearing form factor
         """
-        R_default = ( ( 3 * zero_q_magnitude ) / (4 * np.pi) ) ** (1./3)
-        R = kwargs.get("R", R_default)
-        
-        smear = kwargs.get("smear", 0)
-        
+        R = ( ( 3 * zero_q_magnitude ) / (4 * np.pi) ) ** (1./3)
         qR = qNorm * R
         ff = 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
-        fsmear = np.exp( -(smear**2 * qR**2 / 2) )
-        
-        return ff, fsmear
+        return ff
 
 class Circle2DForm(ParticleForm):
     """ Form factor for 2D circles """
     
-    @classmethod
-    def formFactorAmplitude(cls, qNorm = 0, zero_q_magnitude = 1, **kwargs):
+    @staticmethod
+    @numba.jit("double(double,double)")
+    def formFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
         """ 
         Returns the form factor amplitude for a 2D circular particle.
         
@@ -104,29 +95,17 @@ class Circle2DForm(ParticleForm):
             If R not specified, this is taken to be the area
             of the circle. Otherwise, it is simply treated as
             a scaling factor.
-        R : scalar (optional, keyworded)
-            The radius of the circle
-        smear : scalar (optional, keyworded)
-            The gaussian smearing factor.
         
         Returns
         -------
         f_of_q : scalar
             The form factor at q.
-        f_smear : scalar
-            The gaussian smearing form factor
         """
-        R_default = np.sqrt( zero_q_magnitude / np.pi )
-        R = kwargs.get("R", R_default)
-        
-        smear = kwargs.get("smear",0)
-        
+        R = np.sqrt( zero_q_magnitude / np.pi )
         qR = qNorm * R
-        #ff = ( 2.0 / (qR**2) ) * ( 1.0 - (sp.special.j1(2.0*qR) / qR))
         ff = (2.0 / (qR**3)) * (qR - j1(2.0*qR))
         ff = zero_q_magnitude*ff
-        f_smear = np.exp( -(smear**2 * qR**2 / 2.0) )
-        return ff, f_smear
+        return ff
 
 def defaultFormFactor(dim):
     """ Return default form factor for dimensionality dim """

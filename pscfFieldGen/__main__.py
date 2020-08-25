@@ -4,7 +4,7 @@ from pscfFieldGen.structure import ( Lattice,
                         ScatteringParticle,
                         POSITION_TOLERANCE,
                         buildCrystal )
-from pscfFieldGen.fieldGenerators import FieldCalculator
+from pscfFieldGen.fieldGenerators import UniformParticleField
 from pscfFieldGen.filemanagers import PscfParam, PscfppParam
 from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
@@ -43,6 +43,7 @@ def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
     monFrac = param.getMonomerFractions()
     interface = param.getInterfaceWidth(core)
     ngrid = param.ngrid
+    calculator.seedCalculator(ngrid)
     newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface, coreindex=core)
     # Create clean field file if needed.
     if kgrid is None:
@@ -184,7 +185,7 @@ if __name__=="__main__":
     # Create Calculator Object
     if args.trace:
         print("\nSetting Up Calculator")
-    calculator = FieldCalculator(crystal)
+    calculator = UniformParticleField(crystal)
     # Generate File
     if args.trace:
         print("\nGenerating Field File")
