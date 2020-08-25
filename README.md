@@ -165,7 +165,7 @@ is one possibility.
 Running the software requires 2 files:
 
  * A Model file specifying filenames and particle positions.
- * A PSCF Fortran parameter file.
+ * A PSCF parameter file.
 
 In order to simplify input for the user, crystallographic and composition information
 are taken from a PSCF parameter file. 
