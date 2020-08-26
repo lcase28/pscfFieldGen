@@ -339,17 +339,17 @@ class UniformParticleField(FieldCalculatorBase):
     @staticmethod
     @numba.njit
     def __calculate_sums(nbrill,brill,npos,pos):
-        out = 1j*np.zeros(nbrill)
+        out = 1.0j*np.zeros(nbrill,dtype=np.float64)
         for b in range(nbrill):
-            R = 0
-            I = 0
+            R = 0.0
+            I = 0.0
             q = brill[b,:]
             for p in range(npos):
                 r = pos[p,:]
-                qr = 2 * np.pi * np.dot(q,r)
+                qr = 2.0 * np.pi * np.dot(q,r)
                 R = R + np.cos(qr)
                 I = I + np.sin(qr)
-            out[b] = R + 1j*I
+            out[b] = R + 1.0j*I
         return out
     
     ## TODO: Make Lattice Class compatible with numba.jit
@@ -367,6 +367,7 @@ class UniformParticleField(FieldCalculatorBase):
     def __calculate_qnorm_metTen(nbrill, brill, metTen):
         # Temporary workaround until lattice can be directly interfaced from jit
         out = np.zeros(nbrill)
+        dim = len(brill[0,:])
         for i in range(nbrill):
             q = brill[i,:]
             out[i] = np.sqrt( np.dot( q, np.dot( metTen, q ) ) )
