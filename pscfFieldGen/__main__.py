@@ -15,7 +15,7 @@ import numpy as np
 from pathlib import Path
 import warnings
 
-import pickle
+#import pickle
 
 
 def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
@@ -47,9 +47,9 @@ def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
     ngrid = param.ngrid
     calculator.seedCalculator(ngrid)
     newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface, coreindex=core)
-    dataset = {"name":kgridFileName.parent.name,"param":param,"calc":calculator,"field":newField}
-    with open("numbaData",'wb') as f:
-        pickle.dump(dataset,f)
+    #dataset = {"name":kgridFileName.parent.name,"param":param,"calc":calculator,"field":newField}
+    #with open("numbaData",'wb') as f:
+    #    pickle.dump(dataset,f)
     # Create clean field file if needed.
     if kgrid is None:
         kgrid = param.cleanFieldFile()

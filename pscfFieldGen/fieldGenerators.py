@@ -370,7 +370,7 @@ class UniformParticleField(FieldCalculatorBase):
         dim = len(brill[0,:])
         for i in range(nbrill):
             q = brill[i,:]
-            out[i] = np.sqrt( np.dot( q, np.dot( metTen, q ) ) )
+            out[i] = 2.0 * np.pi * np.sqrt( np.dot( q, np.dot( metTen, q ) ) )
         return out
     
     def to_kgrid(self, frac, ngrid,interfaceWidth=None, coreindex=0,lattice=None):
