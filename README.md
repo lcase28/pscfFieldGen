@@ -297,12 +297,17 @@ this tolerance can later be added_.
 For both the Fortran and C++/Cuda versions of PSCF, this generator will handle inputs in the 
 Grand Canonical Ensemble (Fortran version) as well as any combination of *phi* and *mu*
 specified polymers (C++/Cuda version). Cases using explicit system composition (Canonical
-ensemble; *phi* specified for each species) are considered the normal case for this
+ensemble; *phi* specified for all species) are considered the normal case for this
 software. When molecules are specified by chemical potential (Grand Canonical; *mu* specified
 for more than one molecule), their contribution to the volume fraction of monomer species
 is calculated assuming that all Grand Canonical species are present in equal number (same
-number of moles). Reliability of this approach (particularly for mixtures with solvents or 
-significantly uneven polymer sizes) has not yet been robustly tested, and results involving
+number of moles) and share the volume fraction not granted to a canonical (*phi*-specified) 
+species. For calculation of monomer volume fractions,
+this is analogous to treating a single, canonical "molecular complex" species 
+(which contains one molecule of each Grand Canonical species) with sufficient *phi* to
+result in total volume fraction of 1.
+Reliability of this approach (particularly for mixtures with solvents or 
+significantly uneven polymer sizes) has not yet been robustly tested, and field guesses involving
 these inputs should be carefully inspected before use.
 
 [Back to Top](#pscf-particle-phase-field-generator)
