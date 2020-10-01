@@ -12,6 +12,7 @@ import scipy as sp
 import pathlib
 import itertools
 import re
+import warnings
 from enum import Enum
 
 class FieldCalculatorBase(ABC):
@@ -145,14 +146,14 @@ class FieldCalculatorBase(ABC):
         return record
     
     @staticmethod
-    @numba.njit
+    @numba.jit(nopython=True,cache=True)
     def __generate_brillouin(ngrid,kgrid,nvect):
         """ Generate brillouin zone wave-vectors """
         dim = len(ngrid)
         dshift = dim - 1  #used in aliasing
         # Define aliasing method
         def miller_to_brillouin(G):
-            out = np.zeros_like(G,dtype=np.int64)
+            out = np.zeros_like(G,dtype=np.float64)
             out[0] = G[0]
             for i in [1,2]:
                 if dshift >= i:
@@ -162,8 +163,8 @@ class FieldCalculatorBase(ABC):
                         out[i] = G[i]
             return out
         # Iterate
-        brillouin = np.zeros((nvect,dim),dtype=np.int64)
-        G = np.zeros_like(kgrid,dtype=np.int64)
+        brillouin = np.zeros((nvect,dim),dtype=np.float64)
+        G = np.zeros_like(kgrid,dtype=np.float64)
         n = 0
         if dim == 3:
             for i in range(kgrid[0]):
@@ -269,7 +270,7 @@ class UniformParticleField(FieldCalculatorBase):
         self.getComplexSum(ngrid)
         self.getQNorm(ngrid,self.lattice,True)
         return ngrid, self.lattice
-        
+    
     def getComplexSum(self,ngrid):
         """ Determine the complexSum values.
         
@@ -292,7 +293,8 @@ class UniformParticleField(FieldCalculatorBase):
             record = self.__complexSum_cache.get(key)
         else:
             nbrill = self.getNumKgridPoints(ngrid)
-            brill = np.asarray(self.getBrillouinArray(ngrid), dtype=np.float64)
+            #brill = np.asarray(self.getBrillouinArray(ngrid), dtype=np.float64)
+            brill = self.getBrillouinArray(ngrid)
             npos = self.nparticles
             pos = self.getPositionArray()
             record = UniformParticleField.__calculate_sums(nbrill,brill,npos,pos)
@@ -337,24 +339,25 @@ class UniformParticleField(FieldCalculatorBase):
         return pos
     
     @staticmethod
-    @numba.njit
+    @numba.jit(nopython=True,cache=True)
     def __calculate_sums(nbrill,brill,npos,pos):
-        out = 1.0j*np.zeros(nbrill,dtype=np.float64)
+        out = np.zeros(nbrill,dtype=np.complex128)
         for b in range(nbrill):
-            R = 0.0
-            I = 0.0
+            #R = 0.0
+            #I = 0.0
             q = brill[b,:]
             for p in range(npos):
                 r = pos[p,:]
                 qr = 2.0 * np.pi * np.dot(q,r)
-                R = R + np.cos(qr)
-                I = I + np.sin(qr)
-            out[b] = R + 1.0j*I
+                out[b] += np.exp( 1.0j * qr )
+                #R = R + np.cos(qr)
+                #I = I + np.sin(qr)
+            #out[b] = R + 1.0j*I
         return out
     
     ## TODO: Make Lattice Class compatible with numba.jit
     @staticmethod
-    @numba.njit
+    @numba.jit(nopython=True,cache=True)
     def __calculate_qnorm(nbrill, brill, lattice):
         out = np.zeros(nbrill)
         for i in range(nbrill):
@@ -363,7 +366,7 @@ class UniformParticleField(FieldCalculatorBase):
         return out
     
     @staticmethod
-    @numba.njit
+    @numba.jit(nopython=True,cache=True)
     def __calculate_qnorm_metTen(nbrill, brill, metTen):
         # Temporary workaround until lattice can be directly interfaced from jit
         out = np.zeros(nbrill)
@@ -396,8 +399,10 @@ class UniformParticleField(FieldCalculatorBase):
         compSums = self.getComplexSum(ngrid)
         lattice = self.chooseLattice(lattice)
         qnorms = self.getQNorm(ngrid,lattice)
-        form = self.partForm.formFactorAmplitude
-        formFact = self.__getFormFactors(qnorms,particleVol,form)
+        form = self.partForm
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            formFact = self.__getFormFactors(qnorms,particleVol,form)
         
         args = [nspecies, frac, nbrill,brill, compSums, qnorms, vol, formFact, interfaceWidth, coreindex]
         kgrid = self.__kgrid_calc(*args)
@@ -405,18 +410,18 @@ class UniformParticleField(FieldCalculatorBase):
     
     @staticmethod
     @numba.jit(forceobj=True)
-    def __getFormFactors(qnorms,particleVol,form):
+    def __getFormFactors(qnorms,particleVol,formFact):
         out = np.zeros_like(qnorms)
         n = len(qnorms)
         for t in range(n):
             if t == 0:
                 out[t] = 0.0
             else:
-                out[t] = form(qnorms[t], particleVol)
+                out[t] = formFact(qnorms[t], particleVol)
         return out
         
     @staticmethod
-    @numba.njit
+    @numba.jit(nopython=True, cache=True)
     def __kgrid_calc(   nspecies, 
                         frac, 
                         nbrill, 
@@ -427,7 +432,7 @@ class UniformParticleField(FieldCalculatorBase):
                         formFact,
                         interfaceWidth,
                         coreindex ):
-        rho = 1j*np.zeros((nbrill,nspecies))
+        rho = np.zeros((nbrill,nspecies),dtype=np.complex128)
         for t in range(nbrill):
             brillouin = brill[t,:]
             compSum = compSums[t]

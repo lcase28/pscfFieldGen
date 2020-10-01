@@ -11,110 +11,61 @@ import numba
 import numpy as np
 from scipy.special import j1
 
-class ParticleForm(ABC):
+@numba.jit("double(double,double)", nopython=True, cache=True)
+def sphereFormFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
+    """ 
+    Returns the form factor amplitude for a spherical particle.
+    
+    Parameters
+    ----------
+    qNorm : real
+        The magnitude of the wave-vector.
+    zero_q_magnitude : real
+        If R not specified, this is taken to be the volume
+        of the sphere. Otherwise, it is simply treated as
+        a scaling factor.
+    
+    Returns
+    -------
+    f_of_q : scalar
+        The form factor at q.
     """
-    Abstract base for classes representing particle form factors.
-    """
-    
-    @staticmethod
-    @abstractmethod
-    def formFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
-        """ 
-        Returns the form factor amplitude for the particle.
-        
-        Parameters
-        ----------
-        qNorm : real
-            The magnitude of the wave-vector.
-        zero_q_magnitude : real
-            Scaling value for the form factor such that
-            
-            .. math::
-            
-                \lim_{q \\to 0}f(q) = zero_q_magnitude
-        
-        Keyword Parameters
-        ------------------
-        R : real, scalar (optional, keyword)
-            Characteristic size of the particle (override default)
-        smear : real, scalar (optional, keyword)
-            A value on [0,1] by which to smear the particle interfaces
-            (normalized to the particle characteristic length)
-        
-        Returns
-        -------
-        f_of_q : scalar
-            The form factor at q.
-        f_smear : scalar
-            The gaussian smearing form factor
-        """
-        return zero_q_magnitude
-    
-class SphereForm(ParticleForm):
-    """ Sphere Form Factor """
-    
-    @staticmethod
-    @numba.njit("double(double,double)")
-    def formFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
-        """ 
-        Returns the form factor amplitude for a spherical particle.
-        
-        Parameters
-        ----------
-        qNorm : real
-            The magnitude of the wave-vector.
-        zero_q_magnitude : real
-            If R not specified, this is taken to be the volume
-            of the sphere. Otherwise, it is simply treated as
-            a scaling factor.
-        
-        Returns
-        -------
-        f_of_q : scalar
-            The form factor at q.
-        """
-        R = ( ( 3 * zero_q_magnitude ) / (4 * np.pi) ) ** (1./3)
-        qR = qNorm * R
-        ff = 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
-        return ff
+    R = ( ( 3 * zero_q_magnitude ) / (4 * np.pi) ) ** (1./3)
+    qR = qNorm * R
+    ff = 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
+    return ff
 
-class Circle2DForm(ParticleForm):
-    """ Form factor for 2D circles """
+@numba.jit("double(double,double)",forceobj=True, cache=True)
+def circleFormFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
+    """ 
+    Returns the form factor amplitude for a 2D circular particle.
     
-    @staticmethod
-    @numba.jit("double(double,double)",forceobj=True)
-    def formFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
-        """ 
-        Returns the form factor amplitude for a 2D circular particle.
-        
-        Parameters
-        ----------
-        qNorm : real
-            The magnitude of the wave-vector.
-        zero_q_magnitude : real
-            If R not specified, this is taken to be the area
-            of the circle. Otherwise, it is simply treated as
-            a scaling factor.
-        
-        Returns
-        -------
-        f_of_q : scalar
-            The form factor at q.
-        """
-        R = np.sqrt( zero_q_magnitude / np.pi )
-        qR = qNorm * R
-        bessarg = 2.0 * qR
-        bess = j1(bessarg)
-        ff = (2.0 / (qR**3)) * (qR - bess)
-        ff = zero_q_magnitude*ff
-        return ff
+    Parameters
+    ----------
+    qNorm : real
+        The magnitude of the wave-vector.
+    zero_q_magnitude : real
+        The area of the circle.
+    
+    Returns
+    -------
+    f_of_q : scalar
+        The form factor at q.
+    """
+    R = np.sqrt( zero_q_magnitude / np.pi )
+    qR = qNorm * R
+    bessarg = 2.0 * qR
+    bess = j1(bessarg)
+    ff = (2.0 / (qR**3)) * (qR - bess)
+    ff = zero_q_magnitude*ff
+    return ff
 
 def defaultFormFactor(dim):
     """ Return default form factor for dimensionality dim """
     if dim == 2:
-        return Circle2DForm
+        return circleFormFactorAmplitude
     elif dim == 3:
-        return SphereForm
+        return sphereFormFactorAmplitude
     else:
         raise(ValueError("dim must be either 2 or 3. Gave {}".format(dim)))
 
@@ -333,7 +284,7 @@ class ScatteringParticle(ParticleBase):
             self._formFactor = formFactor
     
     def formFactorAmplitude(qnorm, vol, smear):
-        return self._formFactor.formFactorAmplitude(qnorm, vol, smear)
+        return self._formFactor(qnorm, vol, smear)
     
     @property
     def formFactor(self):

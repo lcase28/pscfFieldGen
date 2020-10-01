@@ -13,6 +13,7 @@ import argparse
 from copy import deepcopy
 import numpy as np
 from pathlib import Path
+import time
 import warnings
 
 #import pickle
@@ -45,8 +46,12 @@ def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
     monFrac = param.getMonomerFractions()
     interface = param.getInterfaceWidth(core)
     ngrid = param.ngrid
+    startTime = time.time()
     calculator.seedCalculator(ngrid)
     newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface, coreindex=core)
+    endTime = time.time()
+    rtime = endTime - startTime
+    print("\nCalculated field in {} seconds.\n".format(rtime))
     #dataset = {"name":kgridFileName.parent.name,"param":param,"calc":calculator,"field":newField}
     #with open("numbaData",'wb') as f:
     #    pickle.dump(dataset,f)
@@ -187,10 +192,12 @@ if __name__=="__main__":
     if args.trace:
         print("Crystal being generated:")
         print(crystal.longString)
+    
     # Create Calculator Object
     if args.trace:
         print("\nSetting Up Calculator")
     calculator = UniformParticleField(crystal)
+    
     # Generate File
     if args.trace:
         print("\nGenerating Field File")
