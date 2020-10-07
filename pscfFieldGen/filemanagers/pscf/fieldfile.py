@@ -315,7 +315,32 @@ class SymFieldFile(FieldFile):
             temp = self.fields[k][i]
             self.fields[k][i] = self.fields[k][j]
             self.fields[k][j] = temp
-
+    
+    def fieldSimilarity(self, target):
+        if not self.canCompare(target):
+            raise(ValueError("Can not compare incompatible field files"))
+        
+        field1 = self.fields * np.sqrt( np.stack( [self.counts,self.counts],axis=-1 ) )
+        field2 = target.fields * np.sqrt( np.stack( [target.counts,target.counts],axis=-1 ) )
+        
+        norm1 = np.linalg.norm(field1,axis=0)
+        norm2 = np.linalg.norm(field2,axis=0)
+        ntot = norm1 * norm2
+        
+        intprod = np.diag(np.tensordot(field1,field2,axes=(0,0)))
+        
+        similarity = np.divide(intprod,ntot)
+        return similarity
+    
+    def canCompare(self,target):
+        if type(self) is not type(target):
+            return False
+        if not self.N_monomer == target.N_monomer:
+            return False
+        if not self.N_star == target.N_star:
+            return False
+        return True
+        
     # "Private" methods
     
     # Overriding inherited abstract methods
