@@ -225,7 +225,7 @@ class PscfParam(ParamFile):
         pfile = pscf.ParamFile(filename)
         return cls(pfile)
     
-    def cleanFieldFile(self):
+    def cleanWaveFieldFile(self):
         """
         Return a WaveVectFieldFile object consistent with the parameter file.
         """
@@ -237,6 +237,43 @@ class PscfParam(ParamFile):
         kgrid.group_name = self.file.group_name
         kgrid.N_monomer = self.file.N_monomer
         kgrid.ngrid = self.file.ngrid
+        return kgrid
+    
+    def cleanCoordFieldFile(self):
+        """
+        Return a CoordFieldFile object consistent with the parameter file.
+        """
+        kgrid = pscf.CoordFieldFile()
+        kgrid.dim = self.file.dim
+        kgrid.crystal_system = self.file.crystal_system
+        kgrid.N_cell_param = self.file.N_cell_param
+        kgrid.cell_param = self.file.cell_param
+        kgrid.group_name = self.file.group_name
+        kgrid.N_monomer = self.file.N_monomer
+        kgrid.ngrid = self.file.ngrid
+        return kgrid
+    
+    def cleanWaveFieldFile(self, N_star=2):
+        """
+        Return a WaveVectFieldFile object consistent with the parameter file.
+        """
+        if not self.dim == 1 and not self.file.group_name == "-1":
+            msg = "Method only implemented for lamellar '-1' Structures."
+            raise(NotImplementedError(msg))
+        kgrid = pscf.SymFieldFile()
+        kgrid.dim = self.file.dim
+        kgrid.crystal_system = self.file.crystal_system
+        kgrid.N_cell_param = self.file.N_cell_param
+        kgrid.cell_param = self.file.cell_param
+        kgrid.group_name = self.file.group_name
+        kgrid.N_monomer = self.file.N_monomer
+        kgrid.N_star = N_star
+        waves = [i for i in range(N_star)]
+        kgrid.waves = np.array(waves)
+        counts = [1]
+        for i in range(N_star-1):
+            counts.append(2)
+        kgrid.counts = np.array(counts)
         return kgrid
     
     @property

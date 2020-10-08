@@ -245,7 +245,7 @@ class SymFieldFile(FieldFile):
 
     # "Public" methods
 
-    def __init__(self,filename):
+    def __init__(self,filename=None,skipField=False):
         '''
         Read a PSCF symmetry-adapted field file, and create a new object.
 
@@ -261,8 +261,18 @@ class SymFieldFile(FieldFile):
         self.waves = []
         self.counts = []
         
+        if filename is None:
+            import inspect
+            thisFileString = inspect.getsourcefile(FieldFile)
+            thisFilePath = Path(thisFileString)
+            thisFileRoot = thisFilePath.parent
+            filename = thisFileRoot / "Default_Sym_Field_File"
+            skipField = True
+        
+        self.skipFieldFlag = skipField
         # Field read method called from super class
         super().__init__(filename)
+        self.skipFieldFlag = False
 
     def write(self, file, major=1, minor=0):
         '''
@@ -346,28 +356,32 @@ class SymFieldFile(FieldFile):
     # Overriding inherited abstract methods
     def _readField(self):
         self.N_star = self._input_var('int')
-        for i in range(self.N_star):
-            data = self.file.readline().split()
-            if len(data) != self.N_monomer + self.dim + 1:
-                raise(IoException('Incorrect number of elements in field line'))
-            j = 0
+        if not self.skipFieldFlag:
+            for i in range(self.N_star):
+                data = self.file.readline().split()
+                if len(data) != self.N_monomer + self.dim + 1:
+                    raise(IoException('Incorrect number of elements in field line'))
+                j = 0
 
-            # Read field coefficients
-            self.fields.append([])
-            for k in range(self.N_monomer):
-                value = float(data[j])
-                self.fields[i].append(value)
-                j += 1
+                # Read field coefficients
+                self.fields.append([])
+                for k in range(self.N_monomer):
+                    value = float(data[j])
+                    self.fields[i].append(value)
+                    j += 1
 
-            # Read field coefficients
-            self.waves.append([])
-            for k in range(self.dim):
-                value = int(data[j])
-                self.waves[i].append(value)
-                j += 1
+                # Read field coefficients
+                self.waves.append([])
+                for k in range(self.dim):
+                    value = int(data[j])
+                    self.waves[i].append(value)
+                    j += 1
 
-            # Read star_count
-            self.counts.append(int(data[j]))
+                # Read star_count
+                self.counts.append(int(data[j]))
+        self.fields = np.array(self.fields)
+        self.waves = np.array(self.waves)
+        self.counts = np.array(self.counts)
     
     def _outputField(self):
         self._output_var( 'int', 'N_star')
@@ -409,7 +423,7 @@ class CoordFieldFile(FieldFile):
 
     # "Public" methods
 
-    def __init__(self,filename):
+    def __init__(self,filename=None, skipFields=False):
         '''
         Read a PSCF symmetry-adapted field file, and create a new object.
 
@@ -421,8 +435,18 @@ class CoordFieldFile(FieldFile):
         self.ngrid = [1] # Actual Value read during _readField call
         self.fields = []
         
+        if filename is None:
+            import inspect
+            thisFileString = inspect.getsourcefile(FieldFile)
+            thisFilePath = Path(thisFileString)
+            thisFileRoot = thisFilePath.parent
+            filename = thisFileRoot / "Default_Coord_Field_File"
+            skipField = True
+        
+        self.skipFieldFlag = skipField
         # _readField call made by super
         super().__init__(filename)
+        self.skipFieldFlag = False
 
     def write(self, file, major=1, minor=0):
         '''
@@ -482,8 +506,9 @@ class CoordFieldFile(FieldFile):
         self.ngrid = self._input_vec('int', n=self.dim, comment='ngrid')
         self.gridPoints = np.prod(self.ngrid)
         self.fields = np.zeros((self.gridPoints,self.N_monomer))
-        for i in range(self.gridPoints):
-            self.fields[i,:] = np.array(self._input_vec('real', n=self.dim, comment = None, s = 'R', f = 'N'))
+        if not self.skipFieldFlag:
+            for i in range(self.gridPoints):
+                self.fields[i,:] = np.array(self._input_vec('real', n=self.dim, comment = None, s = 'R', f = 'N'))
     
     def _outputField(self):
         self._output_vec('int', 'ngrid', n=self.dim, s='R', f='A')
