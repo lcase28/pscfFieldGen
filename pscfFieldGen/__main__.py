@@ -1,6 +1,5 @@
 # Library imports
 from pscfFieldGen.generation import (
-    UniformParticleField, 
     generate_field_file,
     read_input_file )
 
@@ -9,7 +8,6 @@ import argparse
 from pathlib import Path
 
 if __name__=="__main__":
-    POSITION_TOLERANCE = 0.001
     # Get command file from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--file","-f", type=str, required=True)

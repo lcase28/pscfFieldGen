@@ -10,6 +10,7 @@ from pscfFieldGen.structure import (
 
 from pscfFieldGen.filemanagers import PscfParam, PscfppParam
 from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
+import pscfFieldGen.util.contexttools as contexttools
 import pscfFieldGen.filemanagers.pscf as pscf
 
 # Standard Library Imports
@@ -21,6 +22,7 @@ import itertools
 import numba
 import numpy as np
 import scipy as sp
+import subprocess
 import pathlib
 import re
 import time
@@ -45,6 +47,7 @@ def generate_field_file(param, calculator, kgridFileName, core=0):
     core : integer
         The index identifying the monomer to be placed in the core of the particles.
     """
+    kgridFileName = kgridFileName.resolve()
     monFrac = param.getMonomerFractions()
     if isinstance(calculator, ParticleFieldBase):
         interface = param.getInterfaceWidth(core)
@@ -52,8 +55,7 @@ def generate_field_file(param, calculator, kgridFileName, core=0):
         calculator.seedCalculator(ngrid)
         newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface, coreindex=core)
         # Create clean field file if needed.
-        if kgrid is None:
-            kgrid = param.cleanWaveFieldFile()
+        kgrid = param.cleanWaveFieldFile()
         kgrid.fields = newField
         kgrid.write(kgridFileName.open(mode='w'))
     elif isinstance(calculator, LamellarFieldGen):
@@ -62,177 +64,11 @@ def generate_field_file(param, calculator, kgridFileName, core=0):
         star.fields = newField
         star.write(kgridFileName.open(mode='w'))
     elif isinstance(calculator,NetworkFieldGen):
-        kgridFileName = kgridFileName.resolve()
         root = kgridFileName.parent
         newField = calculator.to_rgrid(monFrac,param.file,core,root)
         rgrid = param.cleanCoordFieldFile()
         rgrid.fields = newField
-        rgrid.write(kgridFileName.open('w')
-
-def __read_input_file_legacy(filepath, trace=False, omissionWarnings=False):
-    """
-    Read an input file for pscfFieldGen and return data for field generation.
-    
-    Parameters
-    ----------
-    filepath : pathlib.Path
-        The path to the input file. File will be opened and closed during call.
-    trace : Boolean (optional, default False)
-        If True, a detailed trace of the read will be printed to standard output.
-        If False, the call will run silently except for errors and warnings.
-    omissionWarnings : Boolean (optional, default False)
-        If True, warn the caller about optional data omitted from the file.
-        If False, omitted data will be silently set to a default.
-    
-    Returns
-    -------
-    param : pscfFieldGen.filemanagers.ParamFile derivative
-        The parameter file specified in the file. Exact class is chosen
-        based on software specification in the file.
-    calculator : pscfFieldGen.generation.UniformParticleField
-        The calculator object seeded with necessary structural information.
-    outFile : pathlib.Path
-        The filepath specified in the input file to output field data.
-    core_monomer : int
-        The monomer id of the monomer intended to go in the particle cores.
-    
-    Raises
-    ------
-    ValueError : 
-        When a required input is omitted from the input file.
-        Specifically the software, parameter_file, N_particles, 
-        and particle_positions fields
-    """
-    SOFTWARE_MAP = { "pscf" : PscfParam, "pscfpp" : PscfppParam }
-    
-    # Set initial flags
-    hasSoftware = False
-    hasParam = False
-    hasStyle = False
-    hasCore = False
-    nparticle = -1
-    hasOutFile = False
-    hasPositions = False
-    
-    # Set default values
-    ParamFile = None # class of parameter file can be set based on flag
-    input_style = 'motif'
-    outfilestring = 'rho_kgrid'
-    core_monomer = 0
-    
-    # Parse input file
-    with filepath.open(mode='r') as cmdFile:
-        words = wordsGenerator(cmdFile)
-        for word in words:
-            if word == 'software':
-                software = next(words)
-                ParamFile = SOFTWARE_MAP.get(software,None)
-                if ParamFile is None:
-                    raise(ValueError("Invalid software ({}) given.".format(software)))
-                hasSoftware = True
-                data = software
-            elif word == 'parameter_file':
-                if not hasSoftware:
-                    raise(ValueError("Keyword 'software' must appear before 'parameter_file'"))
-                filename = next(words)
-                param = ParamFile.fromFileName(filename)
-                hasParam = True
-                data = filename
-            elif word == 'coord_input_style':
-                input_style = next(words)
-                if input_style == 'motif' or input_style == 'basis':
-                    hasStyle = True
-                    data = input_style
-                else:
-                    raise(ValueError("Invalid option, {}, given for coord_input_style".format(input_style)))
-            elif word == 'core_monomer':
-                core_monomer = int(next(words))
-                if core_monomer >= 0:
-                    hasCore = True
-                    data = core_monomer
-                else:
-                    raise(ValueError("core_monomer must be a non-negative integer. Given {}.".format(core_monomer)))
-            elif word == 'N_particles':
-                nparticle = str_to_num(next(words))
-                if nparticle <= 0:
-                    raise(ValueError("Invalid N_particles given ({}). Must be >= 1.".format(nparticle)))
-                else:
-                    data = nparticle
-            elif word == 'particle_positions':
-                if nparticle <= 0:
-                    raise(ValueError("N_particles must be specified before particle_positions"))
-                elif not hasParam:
-                    raise(ValueError("parameter_file must be specified before particle_positions"))
-                else:
-                    numData = param.dim * nparticle
-                    positionList = np.array( [str_to_num(next(words)) for i in range(numData)] )
-                    partPositions = np.reshape(positionList, (nparticle, param.dim))
-                    data = partPositions
-                    hasPositions = True
-            elif word == 'output_file':
-                outfilestring = next(words)
-                outFile = pathlib.Path(outfilestring)
-                data = outFile
-                hasOutFile = True
-            elif word == 'finish':
-                #do nothing
-                data = ''
-                doneFlag = True
-            else:
-                raise(NotImplementedError("No operation has been set for keyword {}.".format(word)))
-            # if trace requested, echo input file as read
-            if trace:
-                print('{}\n\t{}'.format(word, data))
-    
-    # Check for presence of required data
-    if not hasSoftware:
-        raise(ValueError("Input keyword 'software' must be specified"))
-    if not hasParam:
-        raise(ValueError("Input keyword 'parameter_file' must be specified"))
-    if nparticle <= 0:
-        raise(ValueError("Input keyword 'N_particles' must be specified"))
-    if not hasPositions:
-        raise(ValueError("Particle coordinates must be specified with keyword 'particle_positions'."))
-    
-    # Warn of absence of optional data and state assumptions.
-    if omissionWarnings:
-        if not hasStyle:
-            warnings.warn(RuntimeWarning("coord_input_style not specified. 'motif' assumed."))
-        if not hasOutFile:
-            warnings.warn(RuntimeWarning("Output file name not specified with keyword 'output_file'. Using 'rho_kgrid'."))
-        if not hasCore:
-            warnings.warn(RuntimeWarning("core_monomer not specified. Assuming monomer 0."))
-    
-    # Create Lattice Object
-    if trace:
-        print("\nCreating System Lattice")
-    latticeParams = param.latticeParameters
-    dim = param.dim
-    lattice = Lattice.latticeFromParameters(dim, **latticeParams)
-    if trace:
-        print("\t\t{}".format(lattice))
-    
-    # Create Crystal Object
-    if trace:
-        print("\nCreating Crystal\n")
-    groupname = param.group_name
-    crystalsystem = param.crystal_system
-    crystal = buildCrystal( input_style, 
-                            nparticle, 
-                            partPositions, 
-                            lattice, 
-                            group_name=groupname,
-                            crystal_system=crystalsystem )
-    if trace:
-        print("Crystal being generated:")
-        print(crystal.longString)
-    
-    # Create Calculator Object
-    if trace:
-        print("\nSetting Up Calculator")
-    calculator = UniformParticleField(crystal)
-    
-    return param, calculator, outFile, core_monomer
+        rgrid.write(kgridFileName.open('w'))
 
 def read_input_file(filepath, trace=False, omissionWarnings=False):
     """
@@ -291,8 +127,6 @@ def read_input_file(filepath, trace=False, omissionWarnings=False):
         # Parameter File
         word = next(words)
         if word == 'parameter_file':
-            if not hasSoftware:
-                raise(ValueError("Keyword 'software' must appear before 'parameter_file'"))
             filename = next(words)
             param = ParamFile.fromFileName(filename)
             data = filename
@@ -397,8 +231,6 @@ def _read_particle_input(words, param, trace=False, omissionWarnings=False):
         elif word == 'particle_positions':
             if nparticle <= 0:
                 raise(ValueError("N_particles must be specified before particle_positions"))
-            elif not hasParam:
-                raise(ValueError("parameter_file must be specified before particle_positions"))
             else:
                 numData = param.dim * nparticle
                 positionList = np.array( [str_to_num(next(words)) for i in range(numData)] )
@@ -488,7 +320,7 @@ def _read_lamellar_input(words, param, trace, omissionWarnings):
     if not word == 'finish':
         raise(ValueError("Expected 'finish' flag"))
     if not param.dim == 1:
-        raise(ValueError("Lamellar Field requires 1-dimensional parameter file")
+        raise(ValueError("Lamellar Field requires 1-dimensional parameter file"))
     return LamellarFieldGen()
 
 def _read_network_input(words, param, trace, omissionWarnings):
@@ -536,10 +368,12 @@ def _read_network_input(words, param, trace, omissionWarnings):
         if word == 'network_parameter_file':
             filename = next(words)
             fieldParam = pscf.ParamFile(filename)
+            hasParam = True
             data = filename
         elif word == 'network_star_file':
             filename = next(words)
             fieldFile = pscf.SymFieldFile(filename)
+            hasField = True
             data = filename
         elif word == 'core_monomer':
             core_monomer = int(next(words))
@@ -697,7 +531,7 @@ class ParticleFieldBase(ABC):
             kgrid = self.getKgrid(ngrid)
             nvect = self.getNumKgridPoints(ngrid)
             ngrid = np.array(ngrid)
-            record = FieldCalculatorBase.__generate_brillouin(ngrid,kgrid,nvect)
+            record = ParticleFieldBase.__generate_brillouin(ngrid,kgrid,nvect)
             self.__brillouin_cache.update({key:record})
         return record
     
@@ -1013,7 +847,7 @@ class LamellarFieldGen(object):
     def __init__(self):
         pass
     
-    def to_field(self,frac)
+    def to_field(self,monfrac):
         """ 
         A Field Generation Method for the lamellar phase.
         
@@ -1038,17 +872,24 @@ class NetworkFieldGen(object):
     def __init__(self, pfile, symField):
         self._param = pfile
         self._sym = symField
+        inputFname = self._param.fieldTransforms[0][1]
+        inputFname += "_internal"
+        self._param.fieldTransforms[0][1] = inputFname
+        self._sym_name = pfile.fieldTransforms[0][1]
     
     def _to_raw_rgrid(self):
-        outfile = "networklog"
-        pfile = "param_network"
+        outfile = "networkgenlog"
+        pfile = "param_network_internal"
+        with open(pfile,'w') as f:
+            self._param.write(f)
+        with open(self._sym_name,'w') as f:
+            self._sym.write(f)
         with open(pfile) as fin:
             with open(outfile,'w') as fout:
-                lastLaunch = sub.run("pscf",stdin=fin,stdout=fout)
+                lastLaunch = subprocess.run("pscf",stdin=fin,stdout=fout)
         lastLaunch.check_returncode()
         outfield = self._param.fieldTransforms[0][2]
-        with open(outfield) as f:
-            rgrid = CoordFieldFile(f)
+        rgrid = pscf.CoordFieldFile(outfield)
         return rgrid.fields
     
     def to_rgrid(self, frac, param, coreMon, root):
@@ -1057,7 +898,6 @@ class NetworkFieldGen(object):
         fcore = frac[coreMon]
         fnonCore = 1-fcore
         nmon = len(frac)
-        npoints = np.sum(hist)
         for i in range(nmon):
             if i == coreMon:
                 self._sym.fields[1,i] = 1.0
@@ -1065,12 +905,15 @@ class NetworkFieldGen(object):
                 self._sym.fields[1,i] = -frac[i]/fnonCore
         
         # Convert symmetrized rho to coordinate grid using PSCF
-        with contexttools.cd(root):
-            rgrid_raw = self._to_raw_rgrid(root)
+        internalroot = root/"_network_generator_internal_"
+        internalroot.mkdir()
+        with contexttools.cd(internalroot):
+            rgrid_raw = self._to_raw_rgrid()
         rgrid = np.zeros_like(rgrid_raw)    # stores output rgrid values
         
         # Find levelset threshold
         hist, edges = np.histogram(rgrid_raw[:,coreMon],bins=1000)
+        npoints = np.sum(hist)
         fnorm = hist / npoints
         fcum = np.cumsum(fnorm)
         setbin = np.argmin(np.abs(fcum - fcore))
@@ -1086,3 +929,167 @@ class NetworkFieldGen(object):
                         rgrid[i,j] = frac[j]/fnonCore
         return rgrid
         
+#def _read_input_file_legacy(filepath, trace=False, omissionWarnings=False):
+#    """
+#    Read an input file for pscfFieldGen and return data for field generation.
+#    
+#    Parameters
+#    ----------
+#    filepath : pathlib.Path
+#        The path to the input file. File will be opened and closed during call.
+#    trace : Boolean (optional, default False)
+#        If True, a detailed trace of the read will be printed to standard output.
+#        If False, the call will run silently except for errors and warnings.
+#    omissionWarnings : Boolean (optional, default False)
+#        If True, warn the caller about optional data omitted from the file.
+#        If False, omitted data will be silently set to a default.
+#    
+#    Returns
+#    -------
+#    param : pscfFieldGen.filemanagers.ParamFile derivative
+#        The parameter file specified in the file. Exact class is chosen
+#        based on software specification in the file.
+#    calculator : pscfFieldGen.generation.UniformParticleField
+#        The calculator object seeded with necessary structural information.
+#    outFile : pathlib.Path
+#        The filepath specified in the input file to output field data.
+#    core_monomer : int
+#        The monomer id of the monomer intended to go in the particle cores.
+#    
+#    Raises
+#    ------
+#    ValueError : 
+#        When a required input is omitted from the input file.
+#        Specifically the software, parameter_file, N_particles, 
+#        and particle_positions fields
+#    """
+#    SOFTWARE_MAP = { "pscf" : PscfParam, "pscfpp" : PscfppParam }
+#    
+#    # Set initial flags
+#    hasSoftware = False
+#    hasParam = False
+#    hasStyle = False
+#    hasCore = False
+#    nparticle = -1
+#    hasOutFile = False
+#    hasPositions = False
+#    
+#    # Set default values
+#    ParamFile = None # class of parameter file can be set based on flag
+#    input_style = 'motif'
+#    outfilestring = 'rho_kgrid'
+#    core_monomer = 0
+#    
+#    # Parse input file
+#    with filepath.open(mode='r') as cmdFile:
+#        words = wordsGenerator(cmdFile)
+#        for word in words:
+#            if word == 'software':
+#                software = next(words)
+#                ParamFile = SOFTWARE_MAP.get(software,None)
+#                if ParamFile is None:
+#                    raise(ValueError("Invalid software ({}) given.".format(software)))
+#                hasSoftware = True
+#                data = software
+#            elif word == 'parameter_file':
+#                if not hasSoftware:
+#                    raise(ValueError("Keyword 'software' must appear before 'parameter_file'"))
+#                filename = next(words)
+#                param = ParamFile.fromFileName(filename)
+#                hasParam = True
+#                data = filename
+#            elif word == 'coord_input_style':
+#                input_style = next(words)
+#                if input_style == 'motif' or input_style == 'basis':
+#                    hasStyle = True
+#                    data = input_style
+#                else:
+#                    raise(ValueError("Invalid option, {}, given for coord_input_style".format(input_style)))
+#            elif word == 'core_monomer':
+#                core_monomer = int(next(words))
+#                if core_monomer >= 0:
+#                    hasCore = True
+#                    data = core_monomer
+#                else:
+#                    raise(ValueError("core_monomer must be a non-negative integer. Given {}.".format(core_monomer)))
+#            elif word == 'N_particles':
+#                nparticle = str_to_num(next(words))
+#                if nparticle <= 0:
+#                    raise(ValueError("Invalid N_particles given ({}). Must be >= 1.".format(nparticle)))
+#                else:
+#                    data = nparticle
+#            elif word == 'particle_positions':
+#                if nparticle <= 0:
+#                    raise(ValueError("N_particles must be specified before particle_positions"))
+#                elif not hasParam:
+#                    raise(ValueError("parameter_file must be specified before particle_positions"))
+#                else:
+#                    numData = param.dim * nparticle
+#                    positionList = np.array( [str_to_num(next(words)) for i in range(numData)] )
+#                    partPositions = np.reshape(positionList, (nparticle, param.dim))
+#                    data = partPositions
+#                    hasPositions = True
+#            elif word == 'output_file':
+#                outfilestring = next(words)
+#                outFile = pathlib.Path(outfilestring)
+#                data = outFile
+#                hasOutFile = True
+#            elif word == 'finish':
+#                #do nothing
+#                data = ''
+#                doneFlag = True
+#            else:
+#                raise(NotImplementedError("No operation has been set for keyword {}.".format(word)))
+#            # if trace requested, echo input file as read
+#            if trace:
+#                print('{}\n\t{}'.format(word, data))
+#    
+#    # Check for presence of required data
+#    if not hasSoftware:
+#        raise(ValueError("Input keyword 'software' must be specified"))
+#    if not hasParam:
+#        raise(ValueError("Input keyword 'parameter_file' must be specified"))
+#    if nparticle <= 0:
+#        raise(ValueError("Input keyword 'N_particles' must be specified"))
+#    if not hasPositions:
+#        raise(ValueError("Particle coordinates must be specified with keyword 'particle_positions'."))
+#    
+#    # Warn of absence of optional data and state assumptions.
+#    if omissionWarnings:
+#        if not hasStyle:
+#            warnings.warn(RuntimeWarning("coord_input_style not specified. 'motif' assumed."))
+#        if not hasOutFile:
+#            warnings.warn(RuntimeWarning("Output file name not specified with keyword 'output_file'. Using 'rho_kgrid'."))
+#        if not hasCore:
+#            warnings.warn(RuntimeWarning("core_monomer not specified. Assuming monomer 0."))
+#    
+#    # Create Lattice Object
+#    if trace:
+#        print("\nCreating System Lattice")
+#    latticeParams = param.latticeParameters
+#    dim = param.dim
+#    lattice = Lattice.latticeFromParameters(dim, **latticeParams)
+#    if trace:
+#        print("\t\t{}".format(lattice))
+#    
+#    # Create Crystal Object
+#    if trace:
+#        print("\nCreating Crystal\n")
+#    groupname = param.group_name
+#    crystalsystem = param.crystal_system
+#    crystal = buildCrystal( input_style, 
+#                            nparticle, 
+#                            partPositions, 
+#                            lattice, 
+#                            group_name=groupname,
+#                            crystal_system=crystalsystem )
+#    if trace:
+#        print("Crystal being generated:")
+#        print(crystal.longString)
+#    
+#    # Create Calculator Object
+#    if trace:
+#        print("\nSetting Up Calculator")
+#    calculator = UniformParticleField(crystal)
+#    
+#    return param, calculator, outFile, core_monomer

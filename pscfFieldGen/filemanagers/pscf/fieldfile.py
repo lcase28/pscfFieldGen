@@ -423,7 +423,7 @@ class CoordFieldFile(FieldFile):
 
     # "Public" methods
 
-    def __init__(self,filename=None, skipFields=False):
+    def __init__(self,filename=None, skipField=False):
         '''
         Read a PSCF symmetry-adapted field file, and create a new object.
 
@@ -512,6 +512,7 @@ class CoordFieldFile(FieldFile):
     
     def _outputField(self):
         self._output_vec('int', 'ngrid', n=self.dim, s='R', f='A')
+        self.gridPoints = np.prod(self.ngrid)
         self._nextFieldLine = []
         for i in range(self.gridPoints):
             self._nextFieldLine = self.fields[i,:]

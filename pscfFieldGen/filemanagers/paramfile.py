@@ -38,7 +38,7 @@ class ParamFile(ABC):
         pass
     
     @abstractmethod
-    def cleanFieldFile(self):
+    def cleanWaveFieldFile(self):
         """
         Return a field file manager consistent with the parameter file.
         
@@ -52,6 +52,15 @@ class ParamFile(ABC):
                 field file contents to it, and closes the file.
         """
         pass
+    
+    @abstractmethod
+    def cleanCoordFieldFile(self):
+        pass
+    
+    @abstractmethod
+    def cleanStarFieldFile(self):
+        pass
+    
     
     @property
     @abstractmethod
@@ -253,7 +262,7 @@ class PscfParam(ParamFile):
         kgrid.ngrid = self.file.ngrid
         return kgrid
     
-    def cleanWaveFieldFile(self, N_star=2):
+    def cleanStarFieldFile(self, N_star=2):
         """
         Return a WaveVectFieldFile object consistent with the parameter file.
         """
@@ -268,7 +277,7 @@ class PscfParam(ParamFile):
         kgrid.group_name = self.file.group_name
         kgrid.N_monomer = self.file.N_monomer
         kgrid.N_star = N_star
-        waves = [i for i in range(N_star)]
+        waves = [[i] for i in range(N_star)]
         kgrid.waves = np.array(waves)
         counts = [1]
         for i in range(N_star-1):
@@ -539,7 +548,7 @@ class PscfppParam(ParamFile):
         param = pscfpp.ParamFile(filename)
         return PscfppParam(param)
     
-    def cleanFieldFile(self):
+    def cleanWaveFieldFile(self):
         """
         Return a pscfpp.WaveVectFieldFile instance consistent with the parameter file.
         
@@ -553,6 +562,12 @@ class PscfppParam(ParamFile):
         kgrid.N_monomer = self.nMonomer
         kgrid.ngrid = self.ngrid
         return kgrid
+    
+    def cleanCoordFieldFile(self):
+        raise(NotImplementedError())
+    
+    def cleanStarFieldFile(self):
+        raise(NotImplementedError())
     
     __nCellParamRef = { (1,'lamellar')      :   1, \
                         (2,'square')        :   1, \
