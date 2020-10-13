@@ -28,6 +28,15 @@ import re
 import time
 import warnings
 
+def seed_calculator(calculator,paramWrap, cache=True):
+    if isinstance(calculator, ParticleFieldBase):
+        _seed_particle_calculator(calculator, paramWrap, cache)
+
+def _seed_particle_calculator(calculator, paramWrap,cache):
+    ngrid = paramWrap.ngrid
+    lat = paramWrap.getLattice()
+    calculator.seedCalculator(ngrid,lat)
+
 def generate_field_file(param, calculator, kgridFileName, core=0):
     """
     From the given ParamFile (param), and FieldCalculator (calculator),
@@ -473,7 +482,8 @@ class ParticleFieldBase(ABC):
         if lat is None:
             return self.lattice
         else:
-            raise(NotImplementedError("Lattice Override checks have not been implemented"))
+            return self.lattice
+            #raise(NotImplementedError("Lattice Override checks have not been implemented"))
         
     def getKgrid(self,ngrid):
         key = str(tuple(ngrid))

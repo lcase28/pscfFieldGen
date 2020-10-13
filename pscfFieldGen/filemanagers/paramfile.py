@@ -1,6 +1,6 @@
 import pscfFieldGen.filemanagers.pscf as pscf
 import pscfFieldGen.filemanagers.pscfpp as pscfpp
-import pscfFieldGen.structure.lattice as lattice
+from pscfFieldGen.structure.lattice import Lattice
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -107,7 +107,7 @@ class ParamFile(ABC):
         pass
     
     def getLattice(self):
-        return lattice.latticeFromParameters(self.dim, **self.latticeParameters)
+        return Lattice.latticeFromParameters(self.dim, **self.latticeParameters)
     
     @property
     @abstractmethod
