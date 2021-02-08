@@ -83,7 +83,7 @@ class SphereForm(ParticleForm):
         smear = kwargs.get("smear", 0)
         
         qR = qNorm * R
-        ff = 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
+        ff = zero_q_magnitude * 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
         fsmear = np.exp( -(smear**2 * qR**2 / 2) )
         
         return ff, fsmear
