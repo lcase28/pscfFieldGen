@@ -53,7 +53,6 @@ def generate_field_file(param, calculator, kgridFileName, core=0, kgrid=None):
 SOFTWARE_MAP = { "pscf" : PscfParam, "pscfpp" : PscfppParam }
 
 if __name__=="__main__":
-    POSITION_TOLERANCE = 0.001
     # Get command file from command line
     parser = argparse.ArgumentParser()
     parser.add_argument("--file","-f", type=str, required=True)
