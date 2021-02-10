@@ -32,7 +32,7 @@ def sphereFormFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
     """
     R = ( ( 3 * zero_q_magnitude ) / (4 * np.pi) ) ** (1./3)
     qR = qNorm * R
-    ff = 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
+    ff = zero_q_magnitude * 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
     return ff
 
 @numba.jit("double(double,double)",forceobj=True, cache=True)
