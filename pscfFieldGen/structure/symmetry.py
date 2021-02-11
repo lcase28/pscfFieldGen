@@ -1,13 +1,43 @@
 """ Module defining class to hold symmetry operation data """
 
 from pscfFieldGen.structure.core import POSITION_TOLERANCE
+from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
 from copy import deepcopy
 import enum
 import numpy as np
+import pathlib
 import re
 import sympy as sym
 
+class GroupFileNotFoundError(Exception):
+    def __init__(self,groupname, message=None):
+        self.groupname = groupname
+        if message is None:
+            message = "No group with name {} found.".format(groupname)
+        self.message = message
+    
+class GroupTooLargeError(Exception):
+    """ Exception raised when a group exceeds its allowed size.
+    
+    Attributes
+    ----------
+    maxsize : int
+        The maximum number of members in the group.
+    source : 
+        The object raising the exception.
+    message : str
+        Explanation of the error.
+    """
+    
+    def __init__(self, maxsize, source, message=None):
+        if message is None:
+            message = "{} exceeded allowed size, {}".format(source, maxsize)
+        self.maxsize = maxsize
+        self.source = source
+        self.message = message
+        super().__init__(self.message)
+            
 class GeneralPosition(object):
     def __init__(self, dim, source=None, syms=None):
         self._dim = dim
@@ -146,6 +176,60 @@ class SymmetryOperation(object):
     def reverse(self):
         return SymmetryOperation(self._dim, np.linalg.inv(self._matrix))
     
+    def write(self, outstream):
+        """ Write the operation to a filestream.
+        
+        The operation first prints the point symmetry matrix 
+        (as a {dim}-by-{dim} matrix for {dim}=self.dim).
+        In the line immediately following, the translation
+        component is listed as a row vector. 
+        Thus, if a 3D operation can be written as the augmented matrix
+        
+            m11  m12  m13  v1
+            m21  m22  m23  v2
+            m31  m32  m33  v3
+            0.0  0.0  0.0  1.0
+        
+        it will be printed as
+        
+            m11  m12  m13
+            m21  m22  m23
+            m31  m32  m33
+            v1   v2   v3
+        
+        Similarly, for a 2D operation that can be written as the matrix
+        
+            m11  m12  v1
+            m21  m22  v2
+            0.0  0.0  1.0
+        
+        it will be printed as
+        
+            m11  m12  
+            m21  m22  
+            v1   v2
+        
+        Parameters
+        ----------
+        outstream : File
+            Writable open file object.
+        """
+        dim = self.dim
+        gap = "  "
+        outstream.write("\n")
+        for i in range(dim):
+            s = ""
+            for j in range(dim):
+                s += "{}{}".format(gap,self._matrix[i,j])
+            s += "\n"
+            outstream.write(s)
+        s = ""
+        for i in range(dim):
+            s += "{}{}".format(gap,self._matrix[i,3])
+        s += "\n"
+        outstream.write(s)
+        return outstream
+    
     @classmethod
     def getUnitTranslations(cls, dim):
         op = np.eye(4)
@@ -156,42 +240,304 @@ class SymmetryOperation(object):
             oplist.append(symm)
         return oplist
 
-# testing for above classes
-if __name__ == "__main__":
-    print("Basic Testing Procedures:")
-    print("Testing initialization of basic G.E.P.:")
-    p = GeneralPosition(3)
-    q = GeneralPosition(3)
-    print("Testing that default initialization generates equvallent GEPs:", p==q)
-    op = np.eye(4)
-    print("Testing initialization of identity symmetry operation:")
-    identity = SymmetryOperation(3,op)
-    ip = identity * p
-    print("Applying Identity operation to {}: {}".format(p, ip))
-    op[0:3,3] = 0.5
-    center = SymmetryOperation(3,op)
-    print("Generated body-centering translation operation:\n{}".format(center))
-    cp = center * p
-    print("Applying centering operation to {}: {}".format(p,cp))
-    print("Testing equality of {} and {}: {}".format(ip,cp,ip == cp))
-    temp = identity * center
-    print("Product of identity and centering operation\n{}\nEquals centering operation: {}".format(temp, temp == center))
-    tp = temp * p
-    print("Apply above operation to {}: {}; compare to I*p {}; compare to centered {}".format(p,tp, tp == ip, tp == cp))
-    print("Comparing first symbols in 2 GEPs: {}".format(p.symbol_list[0] == q.symbol_list[0]))
+class SymmetryGroup(object):
+    """
+    A set of symmetry operations, generally a closed set.
     
-    wrap = center * center
-    print("Double application of centering operation gives identity:\n{} {}".format(wrap,wrap == identity))
+    The intention of the class is to contain a closed set of symmetry
+    operations, however this is not strictly enforced. The constructor
+    can be set to bypass the closed-group enforcement with an optional
+    argument, and the class will not become unstable if the group is
+    not closed.
+    """
     
-    print("Testing negative translations and wrapping of GEPS:")
-    op[0:3,3] = -0.25
-    cent = SymmetryOperation(3,op)
-    print("Operation",cent)
-    wp = center * cp
-    print("Apply to centered point: ", wp)
-    wrp = cent * cent * p
-    print("Apply negative translation twice to {}: {}".format(p, wrp))
-
+    ## Constructors
+    
+    def __init__(self, dim, ops, checkClosed=True, maxOperations=400):
+        """
+        Initialize a new SymmetryGroup instance.
+        
+        Parameters
+        ----------
+        dim : int
+            2 if representing a set of 2D operations.
+            3 if representing a set of 3D operations.
+        ops : iterable set of SymmetryOperation objects
+            The complete (or initial) set of symmetry operations in
+            the group.
+        checkClosed : bool (optional)
+            When True (default) the constructor will ensure the group
+            is closed by checking symmetry operation products and adding
+            any new operations found to the group. This option allows 
+            initialization of a closed group from just a generator set.
+            When False, the constructor will accept the provided operations
+            without checking or augmentation.
+        maxOperations : int, value > 0 (optional)
+            The maximum number of operations that the group is permitted to
+            hold. This ensures that, when attempting to build a closed group,
+            an error in the initial generator set does not lead to an infinite
+            loop checking symmetry operations. Default value is 200, slightly 
+            higher than the maximum size of any crystallographic space group.
+        
+        Raises
+        ------
+        TypeError :
+            When dim or maxOperations can not be cast as an int.
+            If any member of ops is not an instance of SymmetryOperation or 
+            derived class.
+        ValueError : 
+            If dim is not a value of 2 or 3.
+            If any member of ops has dimensionality different from that
+            specified for the group.
+            If maxOperations is not a positive, finite value.
+        """
+        # Check dim input value
+        self._dim = int(dim)
+        if self._dim not in [2,3]:
+            raise(ValueError("SymmetryGroup only defined for 2D or 3D systems. Gave {}.".format(dim)))
+        
+        # Check maxOperations input value
+        self._maxOperations = int(maxOperations)
+        if self._maxOperations <= 0:
+            raise(ValueError("maxOperations must be a positive integer. Gave {}.".format(maxOperations)))
+        
+        # Collect initial symmetry operations
+        self._ops = []
+        for op in ops:
+            self.addOperation(op)
+        
+        # Flag indicating confidence that the group is closed.
+        # If true, the group was found closed, and has not been
+        #   modified (using built-in accessors) since.
+        # Used to save time in self.isClosed() checks when group
+        #   is static.
+        self._is_closed = False
+        
+        # Close group
+        if checkClosed:
+            self.makeClosed()
+    
+    @classmethod
+    def fromFile(cls, filename, *args, **kwargs):
+        """ Instantiate the group from a file.
+        
+        Parameters
+        ----------
+        filename : str or pathlib.Path
+            The name of the file to read from.
+        args, kwargs :
+            All optional arguments to the class constructor.
+        """
+        filename = pathlib.Path(filename)
+        filename = filename.resolve()
+        
+        def read_operation(stream, dim):
+            # Read operation matrix from stream
+            # and return as 4x4 numpy array
+            out = np.zeros((4,4))
+            # read point operation matrix
+            for i in range(dim):
+                for j in range(dim):
+                    val = next(stream)
+                    out[i][j] = str_to_num(val)
+            # set identity for 3rd dimension of 2D operations
+            if dim == 2:
+                out[2][2] = 1.0
+            # set identity for translation 
+            out[3][3] = 1.0
+            # read translation component of operation
+            for i in range(dim):
+                val = next(stream)
+                out[i][3] = str_to_num(val)
+            return out
+        
+        with open(filename) as f:
+            words = wordsGenerator(f)
+            # read dim
+            key = next(words)
+            if not key == "dim":
+                msg = "Expected key 'dim', got '{}' in symmetry group file {}."
+                raise(ValueError(msg.format(key,filename)))
+            dim = str_to_num(next(words))
+            # read size
+            key = next(words)
+            if not key == "size":
+                msg = "Expected key 'size', got '{}' in symmetry group file {}."
+                raise(ValueError(msg.format(key,filename)))
+            size = str_to_num(next(words))
+            # Read the set of operations
+            ops = []
+            for i in range(size):
+                mat = read_operation(words,dim)
+                ops.append(SymmetryOperation(dim,mat))
+        
+        return cls(dim, ops, *args, **kwargs)
+    
+    ## Accessors
+    
+    @property
+    def dim(self):
+        return self._dim
+    
+    @property
+    def size(self):
+        return len(self._ops)
+    
+    @property
+    def isClosed(self):
+        if not self._is_closed:
+            self._check_if_closed()
+        return self._is_closed
+    
+    @property
+    def operations(self):
+        return [op for op in self._ops]
+    
+    def operation(self, index):
+        return self[index]
+    
+    def write(self, outstream):
+        """ Write the current group to a file.
+        
+        File format matches that read in the fromFile() method.
+        
+        The file starts with a header:
+            
+            dim     { 2 or 3 }
+            size    { # of symmetry operations in group }
+        
+        Following this, each symmetry operation is printed according to 
+        the specifications of its own write() method.
+        
+        This method can be used to save custom symmetry groups for later use.
+        
+        Parameters
+        ----------
+        outstream : stream
+            The writable stream to which to save the symmetry group.
+        """
+        outstream.write("dim \t{}\n".format(self.dim))
+        outstream.write("size\t{}\n".format(self.size))
+        for op in self._ops:
+            op.write(outstream)
+        return outstream
+    
+    
+    ## Mutators
+     
+    def addOperation(self, op, makeClosed=False):
+        """
+        Add the speficied symmetry operation to the group.
+        
+        Parameters
+        ----------
+        op : SymmetryOperation
+            The SymmetryOperation instance to be added.
+        makeClosed : bool (optional)
+            If False (default), the new operation will be added to the
+            group without any check of closed status.
+            If True, self.makeClosed() will be called after the addition.
+        
+        Returns
+        -------
+        success : bool
+            True if the operation was added.
+            False if the operation was already present.
+        
+        Raises
+        ------
+        TypeError :
+            If op is not an instance of SymmetryOperation.
+        ValueError :
+            If op does not match the dimensionality of the group.
+        GroupTooLargeError : 
+            If adding op would cause the group to exceed its maxOperations.
+        """
+        # Check input requirements
+        if not isinstance(op,SymmetryOperation):
+            raise(TypeError("op must be an instance of SymmetryOperation."))
+        if not op.dim == self.dim:
+            raise(ValueError("op must match the dimensionality of the group."))
+        
+        # Check if op already in the group
+        if op in self:
+            return False
+        
+        # Check if group has room to accept operation
+        if not self.hasRoom():
+            msg = "SymmetryGroup exceeded max size, {}, while adding operation {}."
+            msg = msg.format(self._max_operations, op)
+            raise(GroupTooLargeError(self._max_operations, self))
+        
+        # Add Operation
+        self._ops.append(op)
+        self._is_closed = False
+        
+        # Ensure group still closed
+        if makeClosed:
+            self.makeClosed()
+        return True
+    
+    def makeClosed(self):
+        """ Add symmetry operations to close the group.
+        
+        Iterate over all permuted pairs of symmetry operations,
+        calculating their product and adding any unique results
+        to the group.
+        
+        Raises
+        ------
+        GroupTooLargeError : 
+            When the group reaches its maximum allowed size and
+            still isn't closed.
+        """
+        # skip work if group was closed after last modification
+        if self._is_closed:
+            return None
+        
+        # Repeat search as many times as necessary to no longer find
+        # any new operations, up to remaining_searches
+        addedNew = True
+        remaining_searches = 4 
+        while addedNew:
+            remaining_searches -= 1
+            if remaining_searches <= 0:
+                raise(RuntimeError("SymmetryGroup unable to close in allowed iterations."))
+            addedNew = False
+            i = 0
+            while i < self.size:
+                op_one = self.operation(i)
+                j = 0
+                while j < self.size:
+                    op_two = self.operation(j)
+                    op_test = op_one * op_two
+                    try:
+                        success = self.addOperation(op_test)
+                    except GroupTooLargeError as err:
+                        msg = "SymmetryGroup unable to close.\n{}".format(err.message)
+                        raise(GroupTooLargeError(err.maxsize, self, msg))
+                    if success:
+                        addedNew = True
+                    j += 1
+                i += 1
+        # if program reaches this point, the group is closed.
+        self._is_closed = True
+        return None
+    
+    ## Operators
+    
+    def __getitem__(self,key):
+        if isinstance(key,slice):
+            indices = range(*key.indices(len(self._ops)))
+            return [self._ops[i] for i in indices]
+        return self._ops[i]
+    
+    def __contains__(self, obj):
+        return obj in self._ops
+    
+    def __iter__(self):
+        return iter(self._ops)
+        
 class CRYSTAL_SYSTEM(enum.Enum):
     OBLIQUE         = 1
     RECTANGULAR     = 2
@@ -205,294 +551,442 @@ class CRYSTAL_SYSTEM(enum.Enum):
     RHOMBOHEDRAL    = 9
     CUBIC           = 10
 
+def getGroupSymmetryFileName(dim, crystal_system, group_name):
+    """
+    Get the group filename from given group name
+    
+    Parameters
+    ----------
+    dim : either 2 or 3
+        Dimensionality of the unit cell.
+        If 2, plane groups will be sought. If 3, space groups will be sought.
+    crystal_system : group_data.CRYSTAL_SYSTEM
+        The crystal system in which to look for the group.
+        CRYSTAL_SYSTEM.HEXAGONAL applies to both 2D and 3D systems.
+    group_name : string
+        Name should match that expected as input into the PSCF software 
+        (see: http://pscf.cems.umn.edu/) or its C++ version.
+        Also accepts an integer or string equivallent of the group ID number.
+    
+    Returns
+    -------
+    filename : pathlib.Path
+        Absolute path to the databased symmetry file.
+    
+    Raises
+    ------
+    ValueError if no group entry is found for the given parameter set.
+    """
+    # First check for ID number inputs
+    group_id = str(group_name)
+    key = (dim, crystal_system, group_id)
+    out = GROUP_NAME_BY_ID.get( key, None )
+    if out is not None:
+        group_name = out
+    # Check for filename by PSCF group name
+    key = (dim, crystal_system, group_name)
+    out = GROUP_FILE_BY_NAME.get( key, None )
+    if out is None:
+        # Check ' : 2' ending
+        key = (dim, crystal_system, group_name+" : 2")
+        out = GROUP_FILE_BY_NAME.get( key, None )
+    if out is None:
+        # Check ' : H' ending
+        key = (dim, crystal_system, group_name+" : H")
+        out = GROUP_FILE_BY_NAME.get( key, None )
+    if out is None:
+        # Assume group_name is already in pscfpp format (filename format)
+        out = group_name
+    # Build path to libraries
+    fname = pathlib.Path(__file__).parent.absolute()
+    fname = fname / "groups" / str(dim) / out
+    if not fname.is_file():
+        raise(GroupFileNotFoundError(group_name))
+    return fname
+
+class SpaceGroup(object):
+    """ Class to generate symmetry operation group and GEPs for space groups """
+    
+    __max_ops = 195 # 192 operations + 3 unit translations
+    __max_gep = 192
+    
+    def __init__(self, dim, crystal_system, group_name):
+        """
+        Initialize a SpaceGroup instance.
+        
+        Parameters
+        ----------
+        dim : int, either 2 or 3
+            dimensionality of the plane (2D) or space (3D) group
+        crystal_system : string
+            The name of the crystal system.
+            If dim = 2: oblique, rectangular, hexagonal, square.
+            If dim = 3: triclinic, monoclinic, orthorhombic, tetragonal, trigonal, hexagonal, cubic
+        group_name : string
+            The name of the space group.
+            See PSCF user manual (https://pscf.readthedocs.io/en/latest/#) for name formatting.
+        """
+        self._dim = dim
+        self._crystal_system = crystal_system.strip("'")
+        self._group_name = group_name.strip("'")
+        sourcefile = getGroupSymmetryFileName(self.dim, self.crystalSystem, self.groupName)
+        self._symmetry_group =  SymmetryGroup.fromFile( \
+                                    sourcefile, \
+                                    checkClosed = False, \
+                                    maxOperations = SpaceGroup.__max_ops)
+        self._build_GEPs()
+    
+    @property
+    def dim(self):
+        return self._dim
+    
+    @property
+    def crystalSystem(self):
+        return str(self._crystal_system)
+    
+    @property
+    def groupName(self):
+        return str(self._group_name)
+    
+    @property
+    def symmetryCount(self):
+        return self._symmetry_group.size
+    
+    @property
+    def symmetryOperations(self):
+        return self._symmetry_group.operations
+    
+    @property
+    def positionCount(self):
+        return len(self._general_positions)
+    
+    @property
+    def generalPositions(self):
+        return [gep for gep in self._general_positions]
+    
+    def evaluatePosition(self, position, atol=POSITION_TOLERANCE):
+        """ Apply each GEP to the given position and return the set of unique positions. 'Uniqueness' determined by a separation of greater than atol. """
+        out = []
+        for p in self._general_positions:
+            nextPos = p.evaluate(position)
+            matchFound = False
+            for q in out:
+                diff = np.absolute(nextPos - q)
+                if np.all(diff < atol):
+                    matchFound = True
+                    break
+            if not matchFound:
+                out.append(nextPos)
+        return out
+    
+    def evaluatePositions(self, positions, atol=POSITION_TOLERANCE):
+        out = []
+        for p in positions:
+            out.append(self.evaluatePosition(p,atol))
+    
+    def __str__(self):
+        formstr = "< SpaceGroup object with dim = {}, system = {}, group name = {} >"
+        return formstr.format(self.dim, self.crystalSystem, self.groupName)
+    
+    def _build_GEPs(self):
+        pos = GeneralPosition(self._dim)
+        geps = [pos]
+        for symm in self.symmetryOperations:
+            newPos = symm @ pos
+            if not newPos in geps:
+                geps.append(newPos)
+        self._general_positions = geps
+    
 """
 Group identifying data
     Keys are tuples of (dimension, crystal_system, group_name)
     values are the ID number of the group.
 """
-GROUP_ID_BY_NAME = {    ( 2, 'oblique',      'p 1'           )   :  1, \
-                        ( 2, 'oblique',      'p 2'           )   :  2, \
-                        ( 2, 'rectangular',  'p m'           )   :  3, \
-                        ( 2, 'rectangular',  'p g'           )   :  4, \
-                        ( 2, 'rectangular',  'c m'           )   :  5, \
-                        ( 2, 'rectangular',  'p 2 m m'       )   :  6, \
-                        ( 2, 'rectangular',  'p 2 m g'       )   :  7, \
-                        ( 2, 'rectangular',  'p 2 g g'       )   :  8, \
-                        ( 2, 'rectangular',  'c 2 m m'       )   :  9, \
-                        ( 2, 'square',       'p 4'           )   :  10, \
-                        ( 2, 'square',       'p 4 m m'       )   :  11, \
-                        ( 2, 'square',       'p 4 g m'       )   :  12, \
-                        ( 2, 'hexagonal',    'p 3'           )   :  13, \
-                        ( 2, 'hexagonal',    'p 3 m 1'       )   :  14, \
-                        ( 2, 'hexagonal',    'p 3 1 m'       )   :  15, \
-                        ( 2, 'hexagonal',    'p 6'           )   :  16, \
-                        ( 2, 'hexagonal',    'p 6 m m'       )   :  17, \
-                        ( 3, 'triclinic',    'P 1'           )   :  1, \
-                        ( 3, 'triclinic',    'P -1'          )   :  2, \
-                        ( 3, 'monoclinic',   'P 1 2 1'       )   :  3, \
-                        ( 3, 'monoclinic',   'P 1 21 1'      )   :  4, \
-                        ( 3, 'monoclinic',   'C 1 2 1'       )   :  5, \
-                        ( 3, 'monoclinic',   'P 1 m 1'       )   :  6, \
-                        ( 3, 'monoclinic',   'P 1 c 1'       )   :  7, \
-                        ( 3, 'monoclinic',   'C 1 m 1'       )   :  8, \
-                        ( 3, 'monoclinic',   'C 1 c 1'       )   :  9, \
-                        ( 3, 'monoclinic',   'P 1 2/m 1'     )   :  10, \
-                        ( 3, 'monoclinic',   'P 1 21/m 1'    )   :  11, \
-                        ( 3, 'monoclinic',   'C 1 2/m 1'     )   :  12, \
-                        ( 3, 'monoclinic',   'P 1 2/c 1'     )   :  13, \
-                        ( 3, 'monoclinic',   'P 1 21/c 1'    )   :  14, \
-                        ( 3, 'monoclinic',   'C 1 2/c 1'     )   :  15, \
-                        ( 3, 'orthorhombic', 'P 2 2 2'       )   :  16, \
-                        ( 3, 'orthorhombic', 'P 2 2 21'      )   :  17, \
-                        ( 3, 'orthorhombic', 'P 21 21 2'     )   :  18, \
-                        ( 3, 'orthorhombic', 'P 21 21 21'    )   :  19, \
-                        ( 3, 'orthorhombic', 'C 2 2 21'      )   :  20, \
-                        ( 3, 'orthorhombic', 'C 2 2 2'       )   :  21, \
-                        ( 3, 'orthorhombic', 'F 2 2 2'       )   :  22, \
-                        ( 3, 'orthorhombic', 'I 2 2 2'       )   :  23, \
-                        ( 3, 'orthorhombic', 'I 21 21 21'    )   :  24, \
-                        ( 3, 'orthorhombic', 'P m m 2'       )   :  25, \
-                        ( 3, 'orthorhombic', 'P m c 21'      )   :  26, \
-                        ( 3, 'orthorhombic', 'P c c 2'       )   :  27, \
-                        ( 3, 'orthorhombic', 'P m a 2'       )   :  28, \
-                        ( 3, 'orthorhombic', 'P c a 21'      )   :  29, \
-                        ( 3, 'orthorhombic', 'P n c 2'       )   :  30, \
-                        ( 3, 'orthorhombic', 'P m n 21'      )   :  31, \
-                        ( 3, 'orthorhombic', 'P b a 2'       )   :  32, \
-                        ( 3, 'orthorhombic', 'P n a 21'      )   :  33, \
-                        ( 3, 'orthorhombic', 'P n n 2'       )   :  34, \
-                        ( 3, 'orthorhombic', 'C m m 2'       )   :  35, \
-                        ( 3, 'orthorhombic', 'C m c 21'      )   :  36, \
-                        ( 3, 'orthorhombic', 'C c c 2'       )   :  37, \
-                        ( 3, 'orthorhombic', 'A m m 2'       )   :  38, \
-                        ( 3, 'orthorhombic', 'A b m 2'       )   :  39, \
-                        ( 3, 'orthorhombic', 'A m a 2'       )   :  40, \
-                        ( 3, 'orthorhombic', 'A b a 2'       )   :  41, \
-                        ( 3, 'orthorhombic', 'F m m 2'       )   :  42, \
-                        ( 3, 'orthorhombic', 'F d d 2'       )   :  43, \
-                        ( 3, 'orthorhombic', 'I m m 2'       )   :  44, \
-                        ( 3, 'orthorhombic', 'I b a 2'       )   :  45, \
-                        ( 3, 'orthorhombic', 'I m a 2'       )   :  46, \
-                        ( 3, 'orthorhombic', 'P m m m'       )   :  47, \
-                        ( 3, 'orthorhombic', 'P n n n : 2'   )   :  48, \
-                        ( 3, 'orthorhombic', 'P n n n : 1'   )   :  48, \
-                        ( 3, 'orthorhombic', 'P c c m'       )   :  49, \
-                        ( 3, 'orthorhombic', 'P b a n : 2'   )   :  50, \
-                        ( 3, 'orthorhombic', 'P b a n : 1'   )   :  50, \
-                        ( 3, 'orthorhombic', 'P m m a'       )   :  51, \
-                        ( 3, 'orthorhombic', 'P n n a'       )   :  52, \
-                        ( 3, 'orthorhombic', 'P m n a'       )   :  53, \
-                        ( 3, 'orthorhombic', 'P c c a'       )   :  54, \
-                        ( 3, 'orthorhombic', 'P b a m'       )   :  55, \
-                        ( 3, 'orthorhombic', 'P c c n'       )   :  56, \
-                        ( 3, 'orthorhombic', 'P b c m'       )   :  57, \
-                        ( 3, 'orthorhombic', 'P n n m'       )   :  58, \
-                        ( 3, 'orthorhombic', 'P m m n : 2'   )   :  59, \
-                        ( 3, 'orthorhombic', 'P m m n : 1'   )   :  59, \
-                        ( 3, 'orthorhombic', 'P b c n'       )   :  60, \
-                        ( 3, 'orthorhombic', 'P b c a'       )   :  61, \
-                        ( 3, 'orthorhombic', 'P n m a'       )   :  62, \
-                        ( 3, 'orthorhombic', 'C m c m'       )   :  63, \
-                        ( 3, 'orthorhombic', 'C m c a'       )   :  64, \
-                        ( 3, 'orthorhombic', 'C m m m'       )   :  65, \
-                        ( 3, 'orthorhombic', 'C c c m'       )   :  66, \
-                        ( 3, 'orthorhombic', 'C m m a'       )   :  67, \
-                        ( 3, 'orthorhombic', 'C c c a : 2'   )   :  68, \
-                        ( 3, 'orthorhombic', 'C c c a : 1'   )   :  68, \
-                        ( 3, 'orthorhombic', 'F m m m'       )   :  69, \
-                        ( 3, 'orthorhombic', 'F d d d : 2'   )   :  70, \
-                        ( 3, 'orthorhombic', 'F d d d : 1'   )   :  70, \
-                        ( 3, 'orthorhombic', 'I m m m'       )   :  71, \
-                        ( 3, 'orthorhombic', 'I b a m'       )   :  72, \
-                        ( 3, 'orthorhombic', 'I b c a'       )   :  73, \
-                        ( 3, 'orthorhombic', 'I m m a'       )   :  74, \
-                        ( 3, 'tetragonal',   'P 4'           )   :  75, \
-                        ( 3, 'tetragonal',   'P 41'          )   :  76, \
-                        ( 3, 'tetragonal',   'P 42'          )   :  77, \
-                        ( 3, 'tetragonal',   'P 43'          )   :  78, \
-                        ( 3, 'tetragonal',   'I 4'           )   :  79, \
-                        ( 3, 'tetragonal',   'I 41'          )   :  80, \
-                        ( 3, 'tetragonal',   'P -4'          )   :  81, \
-                        ( 3, 'tetragonal',   'I -4'          )   :  82, \
-                        ( 3, 'tetragonal',   'P 4/m'         )   :  83, \
-                        ( 3, 'tetragonal',   'P 42/m'        )   :  84, \
-                        ( 3, 'tetragonal',   'P 4/n : 2'     )   :  85, \
-                        ( 3, 'tetragonal',   'P 4/n : 1'     )   :  85, \
-                        ( 3, 'tetragonal',   'P 42/n : 2'    )   :  86, \
-                        ( 3, 'tetragonal',   'P 42/n : 1'    )   :  86, \
-                        ( 3, 'tetragonal',   'I 4/m'         )   :  87, \
-                        ( 3, 'tetragonal',   'I 41/a : 2'    )   :  88, \
-                        ( 3, 'tetragonal',   'I 41/a : 1'    )   :  88, \
-                        ( 3, 'tetragonal',   'P 4 2 2'       )   :  89, \
-                        ( 3, 'tetragonal',   'P 4 21 2'      )   :  90, \
-                        ( 3, 'tetragonal',   'P 41 2 2'      )   :  91, \
-                        ( 3, 'tetragonal',   'P 41 21 2'     )   :  92, \
-                        ( 3, 'tetragonal',   'P 42 2 2'      )   :  93, \
-                        ( 3, 'tetragonal',   'P 42 21 2'     )   :  94, \
-                        ( 3, 'tetragonal',   'P 43 2 2'      )   :  95, \
-                        ( 3, 'tetragonal',   'P 43 21 2'     )   :  96, \
-                        ( 3, 'tetragonal',   'I 4 2 2'       )   :  97, \
-                        ( 3, 'tetragonal',   'I 41 2 2'      )   :  98, \
-                        ( 3, 'tetragonal',   'P 4 m m'       )   :  99, \
-                        ( 3, 'tetragonal',   'P 4 b m'       )   :  100, \
-                        ( 3, 'tetragonal',   'P 42 c m'      )   :  101, \
-                        ( 3, 'tetragonal',   'P 42 n m'      )   :  102, \
-                        ( 3, 'tetragonal',   'P 4 c c'       )   :  103, \
-                        ( 3, 'tetragonal',   'P 4 n c'       )   :  104, \
-                        ( 3, 'tetragonal',   'P 42 m c'      )   :  105, \
-                        ( 3, 'tetragonal',   'P 42 b c'      )   :  106, \
-                        ( 3, 'tetragonal',   'I 4 m m'       )   :  107, \
-                        ( 3, 'tetragonal',   'I 4 c m'       )   :  108, \
-                        ( 3, 'tetragonal',   'I 41 m d'      )   :  109, \
-                        ( 3, 'tetragonal',   'I 41 c d'      )   :  110, \
-                        ( 3, 'tetragonal',   'P -4 2 m'      )   :  111, \
-                        ( 3, 'tetragonal',   'P -4 2 c'      )   :  112, \
-                        ( 3, 'tetragonal',   'P -4 21 m'     )   :  113, \
-                        ( 3, 'tetragonal',   'P -4 21 c'     )   :  114, \
-                        ( 3, 'tetragonal',   'P -4 m 2'      )   :  115, \
-                        ( 3, 'tetragonal',   'P -4 c 2'      )   :  116, \
-                        ( 3, 'tetragonal',   'P -4 b 2'      )   :  117, \
-                        ( 3, 'tetragonal',   'P -4 n 2'      )   :  118, \
-                        ( 3, 'tetragonal',   'I -4 m 2'      )   :  119, \
-                        ( 3, 'tetragonal',   'I -4 c 2'      )   :  120, \
-                        ( 3, 'tetragonal',   'I -4 2 m'      )   :  121, \
-                        ( 3, 'tetragonal',   'I -4 2 d'      )   :  122, \
-                        ( 3, 'tetragonal',   'P 4/m m m'     )   :  123, \
-                        ( 3, 'tetragonal',   'P 4/m c c'     )   :  124, \
-                        ( 3, 'tetragonal',   'P 4/n b m : 2' )   :  125, \
-                        ( 3, 'tetragonal',   'P 4/n b m : 1' )   :  125, \
-                        ( 3, 'tetragonal',   'P 4/n n c : 2' )   :  126, \
-                        ( 3, 'tetragonal',   'P 4/n n c : 1' )   :  126, \
-                        ( 3, 'tetragonal',   'P 4/m b m'     )   :  127, \
-                        ( 3, 'tetragonal',   'P 4/m n c'     )   :  128, \
-                        ( 3, 'tetragonal',   'P 4/n m m : 2' )   :  129, \
-                        ( 3, 'tetragonal',   'P 4/n m m : 1' )   :  129, \
-                        ( 3, 'tetragonal',   'P 4/n c c : 2' )   :  130, \
-                        ( 3, 'tetragonal',   'P 4/n c c : 1' )   :  130, \
-                        ( 3, 'tetragonal',   'P 42/m m c'    )   :  131, \
-                        ( 3, 'tetragonal',   'P 42/m c m'    )   :  132, \
-                        ( 3, 'tetragonal',   'P 42/n b c : 2')   :  133, \
-                        ( 3, 'tetragonal',   'P 42/n b c : 1')   :  133, \
-                        ( 3, 'tetragonal',   'P 42/n n m : 2')   :  134, \
-                        ( 3, 'tetragonal',   'P 42/n n m : 1')   :  134, \
-                        ( 3, 'tetragonal',   'P 42/m b c'    )   :  135, \
-                        ( 3, 'tetragonal',   'P 42/m n m'    )   :  136, \
-                        ( 3, 'tetragonal',   'P 42/n m c : 2')   :  137, \
-                        ( 3, 'tetragonal',   'P 42/n m c : 1')   :  137, \
-                        ( 3, 'tetragonal',   'P 42/n c m : 2')   :  138, \
-                        ( 3, 'tetragonal',   'P 42/n c m : 1')   :  138, \
-                        ( 3, 'tetragonal',   'I 4/m m m'     )   :  139, \
-                        ( 3, 'tetragonal',   'I 4/m c m'     )   :  140, \
-                        ( 3, 'tetragonal',   'I 41/a m d : 2')   :  141, \
-                        ( 3, 'tetragonal',   'I 41/a m d : 1')   :  141, \
-                        ( 3, 'tetragonal',   'I 41/a c d : 2')   :  142, \
-                        ( 3, 'tetragonal',   'I 41/a c d : 1')   :  142, \
-                        ( 3, 'trigonal',     'P 3'           )   :  143, \
-                        ( 3, 'trigonal',     'P 31'          )   :  144, \
-                        ( 3, 'trigonal',     'P 32'          )   :  145, \
-                        ( 3, 'trigonal',     'R 3 : H'       )   :  146, \
-                        ( 3, 'trigonal',     'R 3 : R'       )   :  146, \
-                        ( 3, 'trigonal',     'P -3'          )   :  147, \
-                        ( 3, 'trigonal',     'R -3 : H'      )   :  148, \
-                        ( 3, 'trigonal',     'R -3 : R'      )   :  148, \
-                        ( 3, 'trigonal',     'P 3 1 2'       )   :  149, \
-                        ( 3, 'trigonal',     'P 3 2 1'       )   :  150, \
-                        ( 3, 'trigonal',     'P 31 1 2'      )   :  151, \
-                        ( 3, 'trigonal',     'P 31 2 1'      )   :  152, \
-                        ( 3, 'trigonal',     'P 32 1 2'      )   :  153, \
-                        ( 3, 'trigonal',     'P 32 2 1'      )   :  154, \
-                        ( 3, 'trigonal',     'R 3 2 : H'     )   :  155, \
-                        ( 3, 'trigonal',     'R 3 2 : R'     )   :  155, \
-                        ( 3, 'trigonal',     'P 3 m 1'       )   :  156, \
-                        ( 3, 'trigonal',     'P 3 1 m'       )   :  157, \
-                        ( 3, 'trigonal',     'P 3 c 1'       )   :  158, \
-                        ( 3, 'trigonal',     'P 3 1 c'       )   :  159, \
-                        ( 3, 'trigonal',     'R 3 m : H'     )   :  160, \
-                        ( 3, 'trigonal',     'R 3 m : R'     )   :  160, \
-                        ( 3, 'trigonal',     'R 3 c : H'     )   :  161, \
-                        ( 3, 'trigonal',     'R 3 c : R'     )   :  161, \
-                        ( 3, 'trigonal',     'P -3 1 m'      )   :  162, \
-                        ( 3, 'trigonal',     'P -3 1 c'      )   :  163, \
-                        ( 3, 'trigonal',     'P -3 m 1'      )   :  164, \
-                        ( 3, 'trigonal',     'P -3 c 1'      )   :  165, \
-                        ( 3, 'trigonal',     'R -3 m : H'    )   :  166, \
-                        ( 3, 'trigonal',     'R -3 m : R'    )   :  166, \
-                        ( 3, 'trigonal',     'R -3 c : H'    )   :  167, \
-                        ( 3, 'trigonal',     'R -3 c : R'    )   :  167, \
-                        ( 3, 'hexagonal',    'P 6'           )   :  168, \
-                        ( 3, 'hexagonal',    'P 61'          )   :  169, \
-                        ( 3, 'hexagonal',    'P 65'          )   :  170, \
-                        ( 3, 'hexagonal',    'P 62'          )   :  171, \
-                        ( 3, 'hexagonal',    'P 64'          )   :  172, \
-                        ( 3, 'hexagonal',    'P 63'          )   :  173, \
-                        ( 3, 'hexagonal',    'P -6'          )   :  174, \
-                        ( 3, 'hexagonal',    'P 6/m'         )   :  175, \
-                        ( 3, 'hexagonal',    'P 63/m'        )   :  176, \
-                        ( 3, 'hexagonal',    'P 6 2 2'       )   :  177, \
-                        ( 3, 'hexagonal',    'P 61 2 2'      )   :  178, \
-                        ( 3, 'hexagonal',    'P 65 2 2'      )   :  179, \
-                        ( 3, 'hexagonal',    'P 62 2 2'      )   :  180, \
-                        ( 3, 'hexagonal',    'P 64 2 2'      )   :  181, \
-                        ( 3, 'hexagonal',    'P 63 2 2'      )   :  182, \
-                        ( 3, 'hexagonal',    'P 6 m m'       )   :  183, \
-                        ( 3, 'hexagonal',    'P 6 c c'       )   :  184, \
-                        ( 3, 'hexagonal',    'P 63 c m'      )   :  185, \
-                        ( 3, 'hexagonal',    'P 63 m c'      )   :  186, \
-                        ( 3, 'hexagonal',    'P -6 m 2'      )   :  187, \
-                        ( 3, 'hexagonal',    'P -6 c 2'      )   :  188, \
-                        ( 3, 'hexagonal',    'P -6 2 m'      )   :  189, \
-                        ( 3, 'hexagonal',    'P -6 2 c'      )   :  190, \
-                        ( 3, 'hexagonal',    'P 6/m m m'     )   :  191, \
-                        ( 3, 'hexagonal',    'P 6/m c c'     )   :  192, \
-                        ( 3, 'hexagonal',    'P 63/m c m'    )   :  193, \
-                        ( 3, 'hexagonal',    'P 63/m m c'    )   :  194, \
-                        ( 3, 'cubic',        'P 2 3'         )   :  195, \
-                        ( 3, 'cubic',        'F 2 3'         )   :  196, \
-                        ( 3, 'cubic',        'I 2 3'         )   :  197, \
-                        ( 3, 'cubic',        'P 21 3'        )   :  198, \
-                        ( 3, 'cubic',        'I 21 3'        )   :  199, \
-                        ( 3, 'cubic',        'P m -3'        )   :  200, \
-                        ( 3, 'cubic',        'P n -3 : 2'    )   :  201, \
-                        ( 3, 'cubic',        'P n -3 : 1'    )   :  201, \
-                        ( 3, 'cubic',        'F m -3'        )   :  202, \
-                        ( 3, 'cubic',        'F d -3 : 2'    )   :  203, \
-                        ( 3, 'cubic',        'F d -3 : 1'    )   :  203, \
-                        ( 3, 'cubic',        'I m -3'        )   :  204, \
-                        ( 3, 'cubic',        'P a -3'        )   :  205, \
-                        ( 3, 'cubic',        'I a -3'        )   :  206, \
-                        ( 3, 'cubic',        'P 4 3 2'       )   :  207, \
-                        ( 3, 'cubic',        'P 42 3 2'      )   :  208, \
-                        ( 3, 'cubic',        'F 4 3 2'       )   :  209, \
-                        ( 3, 'cubic',        'F 41 3 2'      )   :  210, \
-                        ( 3, 'cubic',        'I 4 3 2'       )   :  211, \
-                        ( 3, 'cubic',        'P 43 3 2'      )   :  212, \
-                        ( 3, 'cubic',        'P 41 3 2'      )   :  213, \
-                        ( 3, 'cubic',        'I 41 3 2'      )   :  214, \
-                        ( 3, 'cubic',        'P -4 3 m'      )   :  215, \
-                        ( 3, 'cubic',        'F -4 3 m'      )   :  216, \
-                        ( 3, 'cubic',        'I -4 3 m'      )   :  217, \
-                        ( 3, 'cubic',        'P -4 3 n'      )   :  218, \
-                        ( 3, 'cubic',        'F -4 3 c'      )   :  219, \
-                        ( 3, 'cubic',        'I -4 3 d'      )   :  220, \
-                        ( 3, 'cubic',        'P m -3 m'      )   :  221, \
-                        ( 3, 'cubic',        'P n -3 n : 2'  )   :  222, \
-                        ( 3, 'cubic',        'P n -3 n : 1'  )   :  222, \
-                        ( 3, 'cubic',        'P m -3 n'      )   :  223, \
-                        ( 3, 'cubic',        'P n -3 m : 2'  )   :  224, \
-                        ( 3, 'cubic',        'P n -3 m : 1'  )   :  224, \
-                        ( 3, 'cubic',        'F m -3 m'      )   :  225, \
-                        ( 3, 'cubic',        'F m -3 c'      )   :  226, \
-                        ( 3, 'cubic',        'F d -3 m : 2'  )   :  227, \
-                        ( 3, 'cubic',        'F d -3 m : 1'  )   :  227, \
-                        ( 3, 'cubic',        'F d -3 c : 2'  )   :  228, \
-                        ( 3, 'cubic',        'F d -3 c : 1'  )   :  228, \
-                        ( 3, 'cubic',        'I m -3 m'      )   :  229, \
-                        ( 3, 'cubic',        'I a -3 d'      )   :  230 }
+GROUP_FILE_BY_NAME = {  ( 2, 'oblique',      'p 1'            )  :  'p_1', \
+                        ( 2, 'oblique',      'p 2'            )  :  'p_2', \
+                        ( 2, 'rectangular',  'p m'            )  :  'p_m', \
+                        ( 2, 'rectangular',  'p g'            )  :  'p_g', \
+                        ( 2, 'rectangular',  'c m'            )  :  'c_m', \
+                        ( 2, 'rectangular',  'p 2 m m'        )  :  'p_2_m_m', \
+                        ( 2, 'rectangular',  'p 2 m g'        )  :  'p_2_m_g', \
+                        ( 2, 'rectangular',  'p 2 g g'        )  :  'p_2_g_g', \
+                        ( 2, 'rectangular',  'c 2 m m'        )  :  'c_2_m_m', \
+                        ( 2, 'square',       'p 4'            )  :  'p_4', \
+                        ( 2, 'square',       'p 4 m m'        )  :  'p_4_m_m', \
+                        ( 2, 'square',       'p 4 g m'        )  :  'p_4_g_m', \
+                        ( 2, 'hexagonal',    'p 3'            )  :  'p_3', \
+                        ( 2, 'hexagonal',    'p 3 m 1'        )  :  'p_3_m_1', \
+                        ( 2, 'hexagonal',    'p 3 1 m'        )  :  'p_3_1_m', \
+                        ( 2, 'hexagonal',    'p 6'            )  :  'p_6', \
+                        ( 2, 'hexagonal',    'p 6 m m'        )  :  'p_6_m_m', \
+                        ( 3, 'triclinic',    'P 1'            )  :  'P_1', \
+                        ( 3, 'triclinic',    'P -1'           )  :  'P_-1', \
+                        ( 3, 'monoclinic',   'P 1 2 1'        )  :  'P_1_2_1', \
+                        ( 3, 'monoclinic',   'P 1 21 1'       )  :  'P_1_21_1', \
+                        ( 3, 'monoclinic',   'C 1 2 1'        )  :  'C_1_2_1', \
+                        ( 3, 'monoclinic',   'P 1 m 1'        )  :  'P_1_m_1', \
+                        ( 3, 'monoclinic',   'P 1 c 1'        )  :  'P_1_c_1', \
+                        ( 3, 'monoclinic',   'C 1 m 1'        )  :  'C_1_m_1', \
+                        ( 3, 'monoclinic',   'C 1 c 1'        )  :  'C_1_c_1', \
+                        ( 3, 'monoclinic',   'P 1 2/m 1'      )  :  'P_1_2%m_1', \
+                        ( 3, 'monoclinic',   'P 1 21/m 1'     )  :  'P_1_21%m_1', \
+                        ( 3, 'monoclinic',   'C 1 2/m 1'      )  :  'C_1_2%m_1', \
+                        ( 3, 'monoclinic',   'P 1 2/c 1'      )  :  'P_1_2%c_1', \
+                        ( 3, 'monoclinic',   'P 1 21/c 1'     )  :  'P_1_21%c_1', \
+                        ( 3, 'monoclinic',   'C 1 2/c 1'      )  :  'C_1_2%c_1', \
+                        ( 3, 'orthorhombic', 'P 2 2 2'        )  :  'P_2_2_2', \
+                        ( 3, 'orthorhombic', 'P 2 2 21'       )  :  'P_2_2_21', \
+                        ( 3, 'orthorhombic', 'P 21 21 2'      )  :  'P_21_21_2', \
+                        ( 3, 'orthorhombic', 'P 21 21 21'     )  :  'P_21_21_21', \
+                        ( 3, 'orthorhombic', 'C 2 2 21'       )  :  'C_2_2_21', \
+                        ( 3, 'orthorhombic', 'C 2 2 2'        )  :  'C_2_2_2', \
+                        ( 3, 'orthorhombic', 'F 2 2 2'        )  :  'F_2_2_2', \
+                        ( 3, 'orthorhombic', 'I 2 2 2'        )  :  'I_2_2_2', \
+                        ( 3, 'orthorhombic', 'I 21 21 21'     )  :  'I_21_21_21', \
+                        ( 3, 'orthorhombic', 'P m m 2'        )  :  'P_m_m_2', \
+                        ( 3, 'orthorhombic', 'P m c 21'       )  :  'P_m_c_21', \
+                        ( 3, 'orthorhombic', 'P c c 2'        )  :  'P_c_c_2', \
+                        ( 3, 'orthorhombic', 'P m a 2'        )  :  'P_m_a_2', \
+                        ( 3, 'orthorhombic', 'P c a 21'       )  :  'P_c_a_21', \
+                        ( 3, 'orthorhombic', 'P n c 2'        )  :  'P_n_c_2', \
+                        ( 3, 'orthorhombic', 'P m n 21'       )  :  'P_m_n_21', \
+                        ( 3, 'orthorhombic', 'P b a 2'        )  :  'P_b_a_2', \
+                        ( 3, 'orthorhombic', 'P n a 21'       )  :  'P_n_a_21', \
+                        ( 3, 'orthorhombic', 'P n n 2'        )  :  'P_n_n_2', \
+                        ( 3, 'orthorhombic', 'C m m 2'        )  :  'C_m_m_2', \
+                        ( 3, 'orthorhombic', 'C m c 21'       )  :  'C_m_c_21', \
+                        ( 3, 'orthorhombic', 'C c c 2'        )  :  'C_c_c_2', \
+                        ( 3, 'orthorhombic', 'A m m 2'        )  :  'A_m_m_2', \
+                        ( 3, 'orthorhombic', 'A b m 2'        )  :  'A_b_m_2', \
+                        ( 3, 'orthorhombic', 'A m a 2'        )  :  'A_m_a_2', \
+                        ( 3, 'orthorhombic', 'A b a 2'        )  :  'A_b_a_2', \
+                        ( 3, 'orthorhombic', 'F m m 2'        )  :  'F_m_m_2', \
+                        ( 3, 'orthorhombic', 'F d d 2'        )  :  'F_d_d_2', \
+                        ( 3, 'orthorhombic', 'I m m 2'        )  :  'I_m_m_2', \
+                        ( 3, 'orthorhombic', 'I b a 2'        )  :  'I_b_a_2', \
+                        ( 3, 'orthorhombic', 'I m a 2'        )  :  'I_m_a_2', \
+                        ( 3, 'orthorhombic', 'P m m m'        )  :  'P_m_m_m', \
+                        ( 3, 'orthorhombic', 'P n n n : 2'    )  :  'P_n_n_n:2', \
+                        ( 3, 'orthorhombic', 'P n n n : 1'    )  :  'P_n_n_n:1', \
+                        ( 3, 'orthorhombic', 'P c c m'        )  :  'P_c_c_m', \
+                        ( 3, 'orthorhombic', 'P b a n : 2'    )  :  'P_b_a_n:2', \
+                        ( 3, 'orthorhombic', 'P b a n : 1'    )  :  'P_b_a_n:1', \
+                        ( 3, 'orthorhombic', 'P m m a'        )  :  'P_m_m_a', \
+                        ( 3, 'orthorhombic', 'P n n a'        )  :  'P_n_n_a', \
+                        ( 3, 'orthorhombic', 'P m n a'        )  :  'P_m_n_a', \
+                        ( 3, 'orthorhombic', 'P c c a'        )  :  'P_c_c_a', \
+                        ( 3, 'orthorhombic', 'P b a m'        )  :  'P_b_a_m', \
+                        ( 3, 'orthorhombic', 'P c c n'        )  :  'P_c_c_n', \
+                        ( 3, 'orthorhombic', 'P b c m'        )  :  'P_b_c_m', \
+                        ( 3, 'orthorhombic', 'P n n m'        )  :  'P_n_n_m', \
+                        ( 3, 'orthorhombic', 'P m m n : 2'    )  :  'P_m_m_n:2', \
+                        ( 3, 'orthorhombic', 'P m m n : 1'    )  :  'P_m_m_n:1', \
+                        ( 3, 'orthorhombic', 'P b c n'        )  :  'P_b_c_n', \
+                        ( 3, 'orthorhombic', 'P b c a'        )  :  'P_b_c_a', \
+                        ( 3, 'orthorhombic', 'P n m a'        )  :  'P_n_m_a', \
+                        ( 3, 'orthorhombic', 'C m c m'        )  :  'C_m_c_m', \
+                        ( 3, 'orthorhombic', 'C m c a'        )  :  'C_m_c_a', \
+                        ( 3, 'orthorhombic', 'C m m m'        )  :  'C_m_m_m', \
+                        ( 3, 'orthorhombic', 'C c c m'        )  :  'C_c_c_m', \
+                        ( 3, 'orthorhombic', 'C m m a'        )  :  'C_m_m_a', \
+                        ( 3, 'orthorhombic', 'C c c a : 2'    )  :  'C_c_c_a:2', \
+                        ( 3, 'orthorhombic', 'C c c a : 1'    )  :  'C_c_c_a:1', \
+                        ( 3, 'orthorhombic', 'F m m m'        )  :  'F_m_m_m', \
+                        ( 3, 'orthorhombic', 'F d d d : 2'    )  :  'F_d_d_d:2', \
+                        ( 3, 'orthorhombic', 'F d d d : 1'    )  :  'F_d_d_d:1', \
+                        ( 3, 'orthorhombic', 'I m m m'        )  :  'I_m_m_m', \
+                        ( 3, 'orthorhombic', 'I b a m'        )  :  'I_b_a_m', \
+                        ( 3, 'orthorhombic', 'I b c a'        )  :  'I_b_c_a', \
+                        ( 3, 'orthorhombic', 'I m m a'        )  :  'I_m_m_a', \
+                        ( 3, 'tetragonal',   'P 4'            )  :  'P_4', \
+                        ( 3, 'tetragonal',   'P 41'           )  :  'P_41', \
+                        ( 3, 'tetragonal',   'P 42'           )  :  'P_42', \
+                        ( 3, 'tetragonal',   'P 43'           )  :  'P_43', \
+                        ( 3, 'tetragonal',   'I 4'            )  :  'I_4', \
+                        ( 3, 'tetragonal',   'I 41'           )  :  'I_41', \
+                        ( 3, 'tetragonal',   'P -4'           )  :  'P_-4', \
+                        ( 3, 'tetragonal',   'I -4'           )  :  'I_-4', \
+                        ( 3, 'tetragonal',   'P 4/m'          )  :  'P_4%m', \
+                        ( 3, 'tetragonal',   'P 42/m'         )  :  'P_42%m', \
+                        ( 3, 'tetragonal',   'P 4/n : 2'      )  :  'P_4%n:2', \
+                        ( 3, 'tetragonal',   'P 4/n : 1'      )  :  'P_4%n:1', \
+                        ( 3, 'tetragonal',   'P 42/n : 2'     )  :  'P_42%n:2', \
+                        ( 3, 'tetragonal',   'P 42/n : 1'     )  :  'P_42%n:1', \
+                        ( 3, 'tetragonal',   'I 4/m'          )  :  'I_4%m', \
+                        ( 3, 'tetragonal',   'I 41/a : 2'     )  :  'I_41%a:2', \
+                        ( 3, 'tetragonal',   'I 41/a : 1'     )  :  'I_41%a:1', \
+                        ( 3, 'tetragonal',   'P 4 2 2'        )  :  'P_4_2_2', \
+                        ( 3, 'tetragonal',   'P 4 21 2'       )  :  'P_4_21_2', \
+                        ( 3, 'tetragonal',   'P 41 2 2'       )  :  'P_41_2_2', \
+                        ( 3, 'tetragonal',   'P 41 21 2'      )  :  'P_41_21_2', \
+                        ( 3, 'tetragonal',   'P 42 2 2'       )  :  'P_42_2_2', \
+                        ( 3, 'tetragonal',   'P 42 21 2'      )  :  'P_42_21_2', \
+                        ( 3, 'tetragonal',   'P 43 2 2'       )  :  'P_43_2_2', \
+                        ( 3, 'tetragonal',   'P 43 21 2'      )  :  'P_43_21_2', \
+                        ( 3, 'tetragonal',   'I 4 2 2'        )  :  'I_4_2_2', \
+                        ( 3, 'tetragonal',   'I 41 2 2'       )  :  'I_41_2_2', \
+                        ( 3, 'tetragonal',   'P 4 m m'        )  :  'P_4_m_m', \
+                        ( 3, 'tetragonal',   'P 4 b m'        )  :  'P_4_b_m', \
+                        ( 3, 'tetragonal',   'P 42 c m'       )  :  'P_42_c_m', \
+                        ( 3, 'tetragonal',   'P 42 n m'       )  :  'P_42_n_m', \
+                        ( 3, 'tetragonal',   'P 4 c c'        )  :  'P_4_c_c', \
+                        ( 3, 'tetragonal',   'P 4 n c'        )  :  'P_4_n_c', \
+                        ( 3, 'tetragonal',   'P 42 m c'       )  :  'P_42_m_c', \
+                        ( 3, 'tetragonal',   'P 42 b c'       )  :  'P_42_b_c', \
+                        ( 3, 'tetragonal',   'I 4 m m'        )  :  'I_4_m_m', \
+                        ( 3, 'tetragonal',   'I 4 c m'        )  :  'I_4_c_m', \
+                        ( 3, 'tetragonal',   'I 41 m d'       )  :  'I_41_m_d', \
+                        ( 3, 'tetragonal',   'I 41 c d'       )  :  'I_41_c_d', \
+                        ( 3, 'tetragonal',   'P -4 2 m'       )  :  'P_-4_2_m', \
+                        ( 3, 'tetragonal',   'P -4 2 c'       )  :  'P_-4_2_c', \
+                        ( 3, 'tetragonal',   'P -4 21 m'      )  :  'P_-4_21_m', \
+                        ( 3, 'tetragonal',   'P -4 21 c'      )  :  'P_-4_21_c', \
+                        ( 3, 'tetragonal',   'P -4 m 2'       )  :  'P_-4_m_2', \
+                        ( 3, 'tetragonal',   'P -4 c 2'       )  :  'P_-4_c_2', \
+                        ( 3, 'tetragonal',   'P -4 b 2'       )  :  'P_-4_b_2', \
+                        ( 3, 'tetragonal',   'P -4 n 2'       )  :  'P_-4_n_2', \
+                        ( 3, 'tetragonal',   'I -4 m 2'       )  :  'I_-4_m_2', \
+                        ( 3, 'tetragonal',   'I -4 c 2'       )  :  'I_-4_c_2', \
+                        ( 3, 'tetragonal',   'I -4 2 m'       )  :  'I_-4_2_m', \
+                        ( 3, 'tetragonal',   'I -4 2 d'       )  :  'I_-4_2_d', \
+                        ( 3, 'tetragonal',   'P 4/m m m'      )  :  'P_4%m_m_m', \
+                        ( 3, 'tetragonal',   'P 4/m c c'      )  :  'P_4%m_c_c', \
+                        ( 3, 'tetragonal',   'P 4/n b m : 2'  )  :  'P_4%n_b_m:2', \
+                        ( 3, 'tetragonal',   'P 4/n b m : 1'  )  :  'P_4%n_b_m:1', \
+                        ( 3, 'tetragonal',   'P 4/n n c : 2'  )  :  'P_4%n_n_c:2', \
+                        ( 3, 'tetragonal',   'P 4/n n c : 1'  )  :  'P_4%n_n_c:1', \
+                        ( 3, 'tetragonal',   'P 4/m b m'      )  :  'P_4%m_b_m', \
+                        ( 3, 'tetragonal',   'P 4/m n c'      )  :  'P_4%m_n_c', \
+                        ( 3, 'tetragonal',   'P 4/n m m : 2'  )  :  'P_4%n_m_m:2', \
+                        ( 3, 'tetragonal',   'P 4/n m m : 1'  )  :  'P_4%n_m_m:1', \
+                        ( 3, 'tetragonal',   'P 4/n c c : 2'  )  :  'P_4%n_c_c:2', \
+                        ( 3, 'tetragonal',   'P 4/n c c : 1'  )  :  'P_4%n_c_c:1', \
+                        ( 3, 'tetragonal',   'P 42/m m c'     )  :  'P_42%m_m_c', \
+                        ( 3, 'tetragonal',   'P 42/m c m'     )  :  'P_42%m_c_m', \
+                        ( 3, 'tetragonal',   'P 42/n b c : 2' )  :  'P_42%n_b_c:2', \
+                        ( 3, 'tetragonal',   'P 42/n b c : 1' )  :  'P_42%n_b_c:1', \
+                        ( 3, 'tetragonal',   'P 42/n n m : 2' )  :  'P_42%n_n_m:2', \
+                        ( 3, 'tetragonal',   'P 42/n n m : 1' )  :  'P_42%n_n_m:1', \
+                        ( 3, 'tetragonal',   'P 42/m b c'     )  :  'P_42%m_b_c', \
+                        ( 3, 'tetragonal',   'P 42/m n m'     )  :  'P_42%m_n_m', \
+                        ( 3, 'tetragonal',   'P 42/n m c : 2' )  :  'P_42%n_m_c:2', \
+                        ( 3, 'tetragonal',   'P 42/n m c : 1' )  :  'P_42%n_m_c:1', \
+                        ( 3, 'tetragonal',   'P 42/n c m : 2' )  :  'P_42%n_c_m:2', \
+                        ( 3, 'tetragonal',   'P 42/n c m : 1' )  :  'P_42%n_c_m:1', \
+                        ( 3, 'tetragonal',   'I 4/m m m'      )  :  'I_4%m_m_m', \
+                        ( 3, 'tetragonal',   'I 4/m c m'      )  :  'I_4%m_c_m', \
+                        ( 3, 'tetragonal',   'I 41/a m d : 2' )  :  'I_41%a_m_d:2', \
+                        ( 3, 'tetragonal',   'I 41/a m d : 1' )  :  'I_41%a_m_d:1', \
+                        ( 3, 'tetragonal',   'I 41/a c d : 2' )  :  'I_41%a_c_d:2', \
+                        ( 3, 'tetragonal',   'I 41/a c d : 1' )  :  'I_41%a_c_d:1', \
+                        ( 3, 'trigonal',     'P 3'            )  :  'P_3', \
+                        ( 3, 'trigonal',     'P 31'           )  :  'P_31', \
+                        ( 3, 'trigonal',     'P 32'           )  :  'P_32', \
+                        ( 3, 'trigonal',     'R 3 : H'        )  :  'R_3:H', \
+                        ( 3, 'trigonal',     'R 3 : R'        )  :  'R_3:R', \
+                        ( 3, 'trigonal',     'P -3'           )  :  'P_-3', \
+                        ( 3, 'trigonal',     'R -3 : H'       )  :  'R_-3:H', \
+                        ( 3, 'trigonal',     'R -3 : R'       )  :  'R_-3:R', \
+                        ( 3, 'trigonal',     'P 3 1 2'        )  :  'P_3_1_2', \
+                        ( 3, 'trigonal',     'P 3 2 1'        )  :  'P_3_2_1', \
+                        ( 3, 'trigonal',     'P 31 1 2'       )  :  'P_31_1_2', \
+                        ( 3, 'trigonal',     'P 31 2 1'       )  :  'P_31_2_1', \
+                        ( 3, 'trigonal',     'P 32 1 2'       )  :  'P_32_1_2', \
+                        ( 3, 'trigonal',     'P 32 2 1'       )  :  'P_32_2_1', \
+                        ( 3, 'trigonal',     'R 3 2 : H'      )  :  'R_3_2:H', \
+                        ( 3, 'trigonal',     'R 3 2 : R'      )  :  'R_3_2:R', \
+                        ( 3, 'trigonal',     'P 3 m 1'        )  :  'P_3_m_1', \
+                        ( 3, 'trigonal',     'P 3 1 m'        )  :  'P_3_1_m', \
+                        ( 3, 'trigonal',     'P 3 c 1'        )  :  'P_3_c_1', \
+                        ( 3, 'trigonal',     'P 3 1 c'        )  :  'P_3_1_c', \
+                        ( 3, 'trigonal',     'R 3 m : H'      )  :  'R_3_m:H', \
+                        ( 3, 'trigonal',     'R 3 m : R'      )  :  'R_3_m:R', \
+                        ( 3, 'trigonal',     'R 3 c : H'      )  :  'R_3_c:H', \
+                        ( 3, 'trigonal',     'R 3 c : R'      )  :  'R_3_c:R', \
+                        ( 3, 'trigonal',     'P -3 1 m'       )  :  'P_-3_1_m', \
+                        ( 3, 'trigonal',     'P -3 1 c'       )  :  'P_-3_1_c', \
+                        ( 3, 'trigonal',     'P -3 m 1'       )  :  'P_-3_m_1', \
+                        ( 3, 'trigonal',     'P -3 c 1'       )  :  'P_-3_c_1', \
+                        ( 3, 'trigonal',     'R -3 m : H'     )  :  'R_-3_m:H', \
+                        ( 3, 'trigonal',     'R -3 m : R'     )  :  'R_-3_m:R', \
+                        ( 3, 'trigonal',     'R -3 c : H'     )  :  'R_-3_c:H', \
+                        ( 3, 'trigonal',     'R -3 c : R'     )  :  'R_-3_c:R', \
+                        ( 3, 'hexagonal',    'P 6'            )  :  'P_6', \
+                        ( 3, 'hexagonal',    'P 61'           )  :  'P_61', \
+                        ( 3, 'hexagonal',    'P 65'           )  :  'P_65', \
+                        ( 3, 'hexagonal',    'P 62'           )  :  'P_62', \
+                        ( 3, 'hexagonal',    'P 64'           )  :  'P_64', \
+                        ( 3, 'hexagonal',    'P 63'           )  :  'P_63', \
+                        ( 3, 'hexagonal',    'P -6'           )  :  'P_-6', \
+                        ( 3, 'hexagonal',    'P 6/m'          )  :  'P_6%m', \
+                        ( 3, 'hexagonal',    'P 63/m'         )  :  'P_63%m', \
+                        ( 3, 'hexagonal',    'P 6 2 2'        )  :  'P_6_2_2', \
+                        ( 3, 'hexagonal',    'P 61 2 2'       )  :  'P_61_2_2', \
+                        ( 3, 'hexagonal',    'P 65 2 2'       )  :  'P_65_2_2', \
+                        ( 3, 'hexagonal',    'P 62 2 2'       )  :  'P_62_2_2', \
+                        ( 3, 'hexagonal',    'P 64 2 2'       )  :  'P_64_2_2', \
+                        ( 3, 'hexagonal',    'P 63 2 2'       )  :  'P_63_2_2', \
+                        ( 3, 'hexagonal',    'P 6 m m'        )  :  'P_6_m_m', \
+                        ( 3, 'hexagonal',    'P 6 c c'        )  :  'P_6_c_c', \
+                        ( 3, 'hexagonal',    'P 63 c m'       )  :  'P_63_c_m', \
+                        ( 3, 'hexagonal',    'P 63 m c'       )  :  'P_63_m_c', \
+                        ( 3, 'hexagonal',    'P -6 m 2'       )  :  'P_-6_m_2', \
+                        ( 3, 'hexagonal',    'P -6 c 2'       )  :  'P_-6_c_2', \
+                        ( 3, 'hexagonal',    'P -6 2 m'       )  :  'P_-6_2_m', \
+                        ( 3, 'hexagonal',    'P -6 2 c'       )  :  'P_-6_2_c', \
+                        ( 3, 'hexagonal',    'P 6/m m m'      )  :  'P_6%m_m_m', \
+                        ( 3, 'hexagonal',    'P 6/m c c'      )  :  'P_6%m_c_c', \
+                        ( 3, 'hexagonal',    'P 63/m c m'     )  :  'P_63%m_c_m', \
+                        ( 3, 'hexagonal',    'P 63/m m c'     )  :  'P_63%m_m_c', \
+                        ( 3, 'cubic',        'P 2 3'          )  :  'P_2_3', \
+                        ( 3, 'cubic',        'F 2 3'          )  :  'F_2_3', \
+                        ( 3, 'cubic',        'I 2 3'          )  :  'I_2_3', \
+                        ( 3, 'cubic',        'P 21 3'         )  :  'P_21_3', \
+                        ( 3, 'cubic',        'I 21 3'         )  :  'I_21_3', \
+                        ( 3, 'cubic',        'P m -3'         )  :  'P_m_-3', \
+                        ( 3, 'cubic',        'P n -3 : 2'     )  :  'P_n_-3:2', \
+                        ( 3, 'cubic',        'P n -3 : 1'     )  :  'P_n_-3:1', \
+                        ( 3, 'cubic',        'F m -3'         )  :  'F_m_-3', \
+                        ( 3, 'cubic',        'F d -3 : 2'     )  :  'F_d_-3:2', \
+                        ( 3, 'cubic',        'F d -3 : 1'     )  :  'F_d_-3:1', \
+                        ( 3, 'cubic',        'I m -3'         )  :  'I_m_-3', \
+                        ( 3, 'cubic',        'P a -3'         )  :  'P_a_-3', \
+                        ( 3, 'cubic',        'I a -3'         )  :  'I_a_-3', \
+                        ( 3, 'cubic',        'P 4 3 2'        )  :  'P_4_3_2', \
+                        ( 3, 'cubic',        'P 42 3 2'       )  :  'P_42_3_2', \
+                        ( 3, 'cubic',        'F 4 3 2'        )  :  'F_4_3_2', \
+                        ( 3, 'cubic',        'F 41 3 2'       )  :  'F_41_3_2', \
+                        ( 3, 'cubic',        'I 4 3 2'        )  :  'I_4_3_2', \
+                        ( 3, 'cubic',        'P 43 3 2'       )  :  'P_43_3_2', \
+                        ( 3, 'cubic',        'P 41 3 2'       )  :  'P_41_3_2', \
+                        ( 3, 'cubic',        'I 41 3 2'       )  :  'I_41_3_2', \
+                        ( 3, 'cubic',        'P -4 3 m'       )  :  'P_-4_3_m', \
+                        ( 3, 'cubic',        'F -4 3 m'       )  :  'F_-4_3_m', \
+                        ( 3, 'cubic',        'I -4 3 m'       )  :  'I_-4_3_m', \
+                        ( 3, 'cubic',        'P -4 3 n'       )  :  'P_-4_3_n', \
+                        ( 3, 'cubic',        'F -4 3 c'       )  :  'F_-4_3_c', \
+                        ( 3, 'cubic',        'I -4 3 d'       )  :  'I_-4_3_d', \
+                        ( 3, 'cubic',        'P m -3 m'       )  :  'P_m_-3_m', \
+                        ( 3, 'cubic',        'P n -3 n : 2'   )  :  'P_n_-3_n:2', \
+                        ( 3, 'cubic',        'P n -3 n : 1'   )  :  'P_n_-3_n:1', \
+                        ( 3, 'cubic',        'P m -3 n'       )  :  'P_m_-3_n', \
+                        ( 3, 'cubic',        'P n -3 m : 2'   )  :  'P_n_-3_m:2', \
+                        ( 3, 'cubic',        'P n -3 m : 1'   )  :  'P_n_-3_m:1', \
+                        ( 3, 'cubic',        'F m -3 m'       )  :  'F_m_-3_m', \
+                        ( 3, 'cubic',        'F m -3 c'       )  :  'F_m_-3_c', \
+                        ( 3, 'cubic',        'F d -3 m : 2'   )  :  'F_d_-3_m:2', \
+                        ( 3, 'cubic',        'F d -3 m : 1'   )  :  'F_d_-3_m:1', \
+                        ( 3, 'cubic',        'F d -3 c : 2'   )  :  'F_d_-3_c:2', \
+                        ( 3, 'cubic',        'F d -3 c : 1'   )  :  'F_d_-3_c:1', \
+                        ( 3, 'cubic',        'I m -3 m'       )  :  'I_m_-3_m', \
+                        ( 3, 'cubic',        'I a -3 d'       )  :  'I_a_-3_d' }
 
 """
 Group identifying data.
     Keys are tuples of (dimension, crystal_system, ID).
-    Values are the group names.
+    Values are the group names (PSCF_Fortran format).
+    For groups with multiple settings, selection follows
+        PSCF_Fortran precedent in selecting ' : 2' and ' : R'
 """
 GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 2, 'oblique',       2   )  :  'p 2', \
@@ -559,10 +1053,8 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'orthorhombic',  46  )  :  'I m a 2', \
                         ( 3, 'orthorhombic',  47  )  :  'P m m m', \
                         ( 3, 'orthorhombic',  48  )  :  'P n n n : 2', \
-                        ( 3, 'orthorhombic',  48  )  :  'P n n n : 1', \
                         ( 3, 'orthorhombic',  49  )  :  'P c c m', \
                         ( 3, 'orthorhombic',  50  )  :  'P b a n : 2', \
-                        ( 3, 'orthorhombic',  50  )  :  'P b a n : 1', \
                         ( 3, 'orthorhombic',  51  )  :  'P m m a', \
                         ( 3, 'orthorhombic',  52  )  :  'P n n a', \
                         ( 3, 'orthorhombic',  53  )  :  'P m n a', \
@@ -572,7 +1064,6 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'orthorhombic',  57  )  :  'P b c m', \
                         ( 3, 'orthorhombic',  58  )  :  'P n n m', \
                         ( 3, 'orthorhombic',  59  )  :  'P m m n : 2', \
-                        ( 3, 'orthorhombic',  59  )  :  'P m m n : 1', \
                         ( 3, 'orthorhombic',  60  )  :  'P b c n', \
                         ( 3, 'orthorhombic',  61  )  :  'P b c a', \
                         ( 3, 'orthorhombic',  62  )  :  'P n m a', \
@@ -582,10 +1073,8 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'orthorhombic',  66  )  :  'C c c m', \
                         ( 3, 'orthorhombic',  67  )  :  'C m m a', \
                         ( 3, 'orthorhombic',  68  )  :  'C c c a : 2', \
-                        ( 3, 'orthorhombic',  68  )  :  'C c c a : 1', \
                         ( 3, 'orthorhombic',  69  )  :  'F m m m', \
                         ( 3, 'orthorhombic',  70  )  :  'F d d d : 2', \
-                        ( 3, 'orthorhombic',  70  )  :  'F d d d : 1', \
                         ( 3, 'orthorhombic',  71  )  :  'I m m m', \
                         ( 3, 'orthorhombic',  72  )  :  'I b a m', \
                         ( 3, 'orthorhombic',  73  )  :  'I b c a', \
@@ -601,12 +1090,9 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'tetragonal',    83  )  :  'P 4/m', \
                         ( 3, 'tetragonal',    84  )  :  'P 42/m', \
                         ( 3, 'tetragonal',    85  )  :  'P 4/n : 2', \
-                        ( 3, 'tetragonal',    85  )  :  'P 4/n : 1', \
                         ( 3, 'tetragonal',    86  )  :  'P 42/n : 2', \
-                        ( 3, 'tetragonal',    86  )  :  'P 42/n : 1', \
                         ( 3, 'tetragonal',    87  )  :  'I 4/m', \
                         ( 3, 'tetragonal',    88  )  :  'I 41/a : 2', \
-                        ( 3, 'tetragonal',    88  )  :  'I 41/a : 1', \
                         ( 3, 'tetragonal',    89  )  :  'P 4 2 2', \
                         ( 3, 'tetragonal',    90  )  :  'P 4 21 2', \
                         ( 3, 'tetragonal',    91  )  :  'P 41 2 2', \
@@ -644,40 +1130,28 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'tetragonal',    123 )  :  'P 4/m m m', \
                         ( 3, 'tetragonal',    124 )  :  'P 4/m c c', \
                         ( 3, 'tetragonal',    125 )  :  'P 4/n b m : 2', \
-                        ( 3, 'tetragonal',    125 )  :  'P 4/n b m : 1', \
                         ( 3, 'tetragonal',    126 )  :  'P 4/n n c : 2', \
-                        ( 3, 'tetragonal',    126 )  :  'P 4/n n c : 1', \
                         ( 3, 'tetragonal',    127 )  :  'P 4/m b m', \
                         ( 3, 'tetragonal',    128 )  :  'P 4/m n c', \
                         ( 3, 'tetragonal',    129 )  :  'P 4/n m m : 2', \
-                        ( 3, 'tetragonal',    129 )  :  'P 4/n m m : 1', \
                         ( 3, 'tetragonal',    130 )  :  'P 4/n c c : 2', \
-                        ( 3, 'tetragonal',    130 )  :  'P 4/n c c : 1', \
                         ( 3, 'tetragonal',    131 )  :  'P 42/m m c', \
                         ( 3, 'tetragonal',    132 )  :  'P 42/m c m', \
                         ( 3, 'tetragonal',    133 )  :  'P 42/n b c : 2', \
-                        ( 3, 'tetragonal',    133 )  :  'P 42/n b c : 1', \
                         ( 3, 'tetragonal',    134 )  :  'P 42/n n m : 2', \
-                        ( 3, 'tetragonal',    134 )  :  'P 42/n n m : 1', \
                         ( 3, 'tetragonal',    135 )  :  'P 42/m b c', \
                         ( 3, 'tetragonal',    136 )  :  'P 42/m n m', \
                         ( 3, 'tetragonal',    137 )  :  'P 42/n m c : 2', \
-                        ( 3, 'tetragonal',    137 )  :  'P 42/n m c : 1', \
                         ( 3, 'tetragonal',    138 )  :  'P 42/n c m : 2', \
-                        ( 3, 'tetragonal',    138 )  :  'P 42/n c m : 1', \
                         ( 3, 'tetragonal',    139 )  :  'I 4/m m m', \
                         ( 3, 'tetragonal',    140 )  :  'I 4/m c m', \
                         ( 3, 'tetragonal',    141 )  :  'I 41/a m d : 2', \
-                        ( 3, 'tetragonal',    141 )  :  'I 41/a m d : 1', \
                         ( 3, 'tetragonal',    142 )  :  'I 41/a c d : 2', \
-                        ( 3, 'tetragonal',    142 )  :  'I 41/a c d : 1', \
                         ( 3, 'trigonal',      143 )  :  'P 3', \
                         ( 3, 'trigonal',      144 )  :  'P 31', \
                         ( 3, 'trigonal',      145 )  :  'P 32', \
-                        ( 3, 'trigonal',      146 )  :  'R 3 : H', \
                         ( 3, 'trigonal',      146 )  :  'R 3 : R', \
                         ( 3, 'trigonal',      147 )  :  'P -3', \
-                        ( 3, 'trigonal',      148 )  :  'R -3 : H', \
                         ( 3, 'trigonal',      148 )  :  'R -3 : R', \
                         ( 3, 'trigonal',      149 )  :  'P 3 1 2', \
                         ( 3, 'trigonal',      150 )  :  'P 3 2 1', \
@@ -685,23 +1159,18 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'trigonal',      152 )  :  'P 31 2 1', \
                         ( 3, 'trigonal',      153 )  :  'P 32 1 2', \
                         ( 3, 'trigonal',      154 )  :  'P 32 2 1', \
-                        ( 3, 'trigonal',      155 )  :  'R 3 2 : H', \
                         ( 3, 'trigonal',      155 )  :  'R 3 2 : R', \
                         ( 3, 'trigonal',      156 )  :  'P 3 m 1', \
                         ( 3, 'trigonal',      157 )  :  'P 3 1 m', \
                         ( 3, 'trigonal',      158 )  :  'P 3 c 1', \
                         ( 3, 'trigonal',      159 )  :  'P 3 1 c', \
-                        ( 3, 'trigonal',      160 )  :  'R 3 m : H', \
                         ( 3, 'trigonal',      160 )  :  'R 3 m : R', \
-                        ( 3, 'trigonal',      161 )  :  'R 3 c : H', \
                         ( 3, 'trigonal',      161 )  :  'R 3 c : R', \
                         ( 3, 'trigonal',      162 )  :  'P -3 1 m', \
                         ( 3, 'trigonal',      163 )  :  'P -3 1 c', \
                         ( 3, 'trigonal',      164 )  :  'P -3 m 1', \
                         ( 3, 'trigonal',      165 )  :  'P -3 c 1', \
-                        ( 3, 'trigonal',      166 )  :  'R -3 m : H', \
                         ( 3, 'trigonal',      166 )  :  'R -3 m : R', \
-                        ( 3, 'trigonal',      167 )  :  'R -3 c : H', \
                         ( 3, 'trigonal',      167 )  :  'R -3 c : R', \
                         ( 3, 'hexagonal',     168 )  :  'P 6', \
                         ( 3, 'hexagonal',     169 )  :  'P 61', \
@@ -737,10 +1206,8 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'cubic',         199 )  :  'I 21 3', \
                         ( 3, 'cubic',         200 )  :  'P m -3', \
                         ( 3, 'cubic',         201 )  :  'P n -3 : 2', \
-                        ( 3, 'cubic',         201 )  :  'P n -3 : 1', \
                         ( 3, 'cubic',         202 )  :  'F m -3', \
                         ( 3, 'cubic',         203 )  :  'F d -3 : 2', \
-                        ( 3, 'cubic',         203 )  :  'F d -3 : 1', \
                         ( 3, 'cubic',         204 )  :  'I m -3', \
                         ( 3, 'cubic',         205 )  :  'P a -3', \
                         ( 3, 'cubic',         206 )  :  'I a -3', \
@@ -760,244 +1227,12 @@ GROUP_NAME_BY_ID = {   ( 2, 'oblique',       1   )  :  'p 1', \
                         ( 3, 'cubic',         220 )  :  'I -4 3 d', \
                         ( 3, 'cubic',         221 )  :  'P m -3 m', \
                         ( 3, 'cubic',         222 )  :  'P n -3 n : 2', \
-                        ( 3, 'cubic',         222 )  :  'P n -3 n : 1', \
                         ( 3, 'cubic',         223 )  :  'P m -3 n', \
                         ( 3, 'cubic',         224 )  :  'P n -3 m : 2', \
-                        ( 3, 'cubic',         224 )  :  'P n -3 m : 1', \
                         ( 3, 'cubic',         225 )  :  'F m -3 m', \
                         ( 3, 'cubic',         226 )  :  'F m -3 c', \
                         ( 3, 'cubic',         227 )  :  'F d -3 m : 2', \
-                        ( 3, 'cubic',         227 )  :  'F d -3 m : 1', \
                         ( 3, 'cubic',         228 )  :  'F d -3 c : 2', \
-                        ( 3, 'cubic',         228 )  :  'F d -3 c : 1', \
                         ( 3, 'cubic',         229 )  :  'I m -3 m', \
                         ( 3, 'cubic',         230 )  :  'I a -3 d'}
-
-def getGroupID(dim, crystal_system, group_name):
-    """
-    Get the plane or space group number, according to the International Tables of Crystallography (2016).
-    
-    Parameters
-    ----------
-    dim : either 2 or 3
-        Dimensionality of the unit cell.
-        If 2, plane groups will be sought. If 3, space groups will be sought.
-    crystal_system : group_data.CRYSTAL_SYSTEM
-        The crystal system in which to look for the group.
-        CRYSTAL_SYSTEM.HEXAGONAL applies to both 2D and 3D systems.
-    group_name : string
-        Name should match that expected as input into the PSCF software 
-        see: http://pscf.cems.umn.edu/
-    
-    Returns
-    -------
-    The Integer group number. 
-        In 2D, these are in range [1,17]. In 3D, in range [1,230]
-    
-    Raises
-    ------
-    ValueError if no group entry is found for the given parameter set.
-    """
-    key = (dim, crystal_system, group_name)
-    out = GROUP_NAME_BY_ID.get( key, None )
-    if out is None:
-        raise(ValueError("No Group ID entry found for input values {}.".format(key)))
-    return out
-
-def getGroupName(dim, crystal_system, group_id):
-    """
-    Get the plane or space group name, according to PSCF specifications ( http://pscf.cems.umn.edu/ ).
-    
-    Parameters
-    ----------
-    dim : either 2 or 3
-        Dimensionality of the unit cell.
-        If 2, plane groups will be sought. If 3, space groups will be sought.
-    crystal_system : group_data.CRYSTAL_SYSTEM
-        The crystal system in which to look for the group.
-        CRYSTAL_SYSTEM.HEXAGONAL applies to both 2D and 3D systems.
-    group_id : int
-        The plane group or space group number according to the International Tables of Crystallography (2016).
-    
-    Returns
-    -------
-    String containing the group name.
-    
-    Raises
-    ------
-    ValueError if no group entry is found for the given parameter set.
-    """
-    key = (dim, crystal_system, group_id)
-    out = GROUP_ID_BY_NAME.get( key, None )
-    if out is None:
-        raise(ValueError("No Group ID entry found for input values {}.".format(key)))
-    return out
-
-class SpaceGroup(object):
-    """ Class to generate symmetry operation group and GEPs for space groups """
-    
-    __max_ops = 195 # 192 operations + 3 unit translations
-    __max_gep = 192
-    
-    def __init__(self, dim, crystal_system, group_name):
-        """
-        Initialize a SpaceGroup instance.
-        
-        Parameters
-        ----------
-        dim : int, either 2 or 3
-            dimensionality of the plane (2D) or space (3D) group
-        crystal_system : string
-            The name of the crystal system.
-            If dim = 2: oblique, rectangular, hexagonal, square.
-            If dim = 3: triclinic, monoclinic, orthorhombic, tetragonal, trigonal, hexagonal, cubic
-        group_name : string
-            The name of the space group.
-            See PSCF user manual (https://pscf.readthedocs.io/en/latest/#) for name formatting.
-        """
-        self._dim = dim
-        self._crystal_system = crystal_system.strip("'")
-        self._group_name = group_name.strip("'")
-        try:
-            generators, originData, countData = getGeneratorSet(dim, self._crystal_system, self._group_name)
-        except(ValueError):
-            raise(ValueError("Unable to find definition for dim={}, crystal_system={!r}, group_name={!r}".format(dim, self._crystal_system, self._group_name)))
-        self._basic_generators = generators
-        self._unit_translations = SymmetryOperation.getUnitTranslations(dim)
-        self._generators = [*self._unit_translations, *self._basic_generators]
-        if originData is None:
-            self._multiple_settings_flag = False
-        else:
-            self._multiple_settings_flag = True
-            self._setting_offset = originData['symmOp']
-            self._is_default_setting = originData['isDefault']
-        self._expected_symmetry_ops = countData['num_operations']
-        self._expected_geps = countData['num_positions']
-        self._build_group()
-        if self._multiple_settings_flag:
-            self._apply_setting()
-        self._build_GEPs()
-    
-    @property
-    def dim(self):
-        return self._dim
-    
-    @property
-    def crystalSystem(self):
-        return str(self._crystal_system)
-    
-    @property
-    def groupName(self):
-        return str(self._group_name)
-    
-    @property
-    def symmetryCount(self):
-        return len(self._symmetry_ops)
-    
-    @property
-    def symmetryOperations(self):
-        return deepcopy(self._symmetry_ops)
-    
-    @property
-    def positionCount(self):
-        return len(self._general_positions)
-    
-    @property
-    def generalPositions(self):
-        return deepcopy(self._general_positions)
-    
-    def evaluatePosition(self, position, atol=POSITION_TOLERANCE):
-        """ Apply each GEP to the given position and return the set of unique positions. 'Uniqueness' determined by a separation of greater than atol. """
-        out = []
-        for p in self._general_positions:
-            nextPos = p.evaluate(position)
-            matchFound = False
-            for q in out:
-                diff = np.absolute(nextPos - q)
-                if np.all(diff < atol):
-                    matchFound = True
-                    break
-            if not matchFound:
-                out.append(nextPos)
-        return out
-    
-    def evaluatePositions(self, positions, atol=POSITION_TOLERANCE):
-        out = []
-        for p in positions:
-            out.append(self.evaluatePosition(p,atol))
-    
-    def __str__(self):
-        formstr = "< SpaceGroup object with dim = {}, system = {}, group name = {} >"
-        return formstr.format(self.dim, self.crystalSystem, self.groupName)
-    
-    def _reached_expected_operations(self):
-        if self.symmetryCount == self._expected_symmetry_ops:
-            return True
-        elif self.symmetryCount > self._expected_symmetry_ops:
-            raise(RuntimeError("Allowed symmetry operations exceeded"))
-        else:
-            return False
-    
-    def _build_group(self):
-        self._symmetry_ops = []
-        for m in self._generators:
-            self._symmetry_ops.append(m)
-        #print(len(self._symmetry_ops))
-        # to ensure full population of symmetries, perform search twice.
-        # Expected number of operations previously determined. When this count
-        #  is reached, the search is terminated.
-        for k in range(2):
-            i = 0
-            while i < len(self._symmetry_ops):
-                #print(len(self._symmetry_ops),i)
-                op_one = self._symmetry_ops[i]
-                j = 0
-                while j < len(self._symmetry_ops):
-                    #print(len(self._symmetry_ops),i,j)
-                    op_two = self._symmetry_ops[j]
-                    symm = op_one * op_two
-                    if not symm in self._symmetry_ops:
-                        self._symmetry_ops.append(symm)
-                        if len(self._symmetry_ops) > self.__class__.__max_ops:
-                            raise(RuntimeError("Exceeded maximum allowed symmetry operations"))
-                    if self._reached_expected_operations():
-                        break
-                    j += 1
-                    
-                if self._reached_expected_operations():
-                    break
-                i += 1
-                
-            if self._reached_expected_operations():
-                break
-    
-    def _apply_setting(self):
-        if not self._is_default_setting:
-            for (i,symm) in enumerate(self._symmetry_ops):
-                self._symmetry_ops[i] = self._setting_offset @ symm @ self._setting_offset.reverse
-    
-    def _build_GEPs(self):
-        pos = GeneralPosition(self._dim)
-        geps = [pos]
-        for symm in self._symmetry_ops:
-            newPos = symm @ pos
-            if not newPos in geps:
-                geps.append(newPos)
-        self._general_positions = geps
-    
-def __testGroup(dim, system, name):
-    print("\nTest: {}D, {}, {}:".format(dim, system, name))
-    sg = SpaceGroup(dim,system,name)
-    print("gens:", len(sg._generators))
-    print("ops:",len(sg._symmetry_ops))
-    print("geps:",len(sg._general_positions))
-    print("generators")
-    for s in sg._generators:
-        print(s)
-    print("Operations:")
-    for s in sg._symmetry_ops:
-        print(s)
-    print("GEPs")
-    for s in sg._general_positions:
-        print(s)
 
