@@ -1,6 +1,7 @@
 software        pscfpp
 parameter_file  param
 output_file     in/rho_kgrid
+structure_type  particle
 
 core_monomer    0
 

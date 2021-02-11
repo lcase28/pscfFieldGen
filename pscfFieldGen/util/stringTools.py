@@ -1,5 +1,6 @@
 """ Module containing useful functions for string parsing """
 import re
+from fractions import Fraction
 
 def str_to_num(stringNum):
     """
@@ -28,7 +29,10 @@ def str_to_num(stringNum):
     try:
         return int(stringNum)
     except(ValueError):
-        return float(stringNum)
+        try:
+            return float(stringNum)
+        except(ValueError):
+            return float(Fraction(stringNum))
 
 def wordsGenerator(stringIterable):
     """
