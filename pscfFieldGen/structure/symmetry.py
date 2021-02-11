@@ -112,6 +112,26 @@ class SymmetryOperation(object):
         self._matrix = np.array(matrix)
         self._capTranslation()
     
+    @property
+    def dim(self):
+        return self._dim
+    
+    def asMatrix(self):
+        """ The full 4x4 augmented matrix of the operation. """
+        return np.array(self._matrix)
+    
+    @property
+    def pointOperator(self):
+        """ The {dim}x{dim} point operation component. """
+        dim = self._dim
+        return self._matrix[:dim,:dim]
+    
+    @property
+    def translationVector(self):
+        """ The {dim}x1 translation vector of the operation. """
+        dim = self._dim
+        return self._matrix[:dim,-1]
+    
     def __mul__(self,other):
         return self.__matmul__(other)
         
@@ -296,10 +316,7 @@ class SymmetryGroup(object):
         if self._dim not in [2,3]:
             raise(ValueError("SymmetryGroup only defined for 2D or 3D systems. Gave {}.".format(dim)))
         
-        # Check maxOperations input value
-        self._maxOperations = int(maxOperations)
-        if self._maxOperations <= 0:
-            raise(ValueError("maxOperations must be a positive integer. Gave {}.".format(maxOperations)))
+        self.capacity = maxOperations
         
         # Collect initial symmetry operations
         self._ops = []
@@ -383,6 +400,21 @@ class SymmetryGroup(object):
     def size(self):
         return len(self._ops)
     
+    @property
+    def capacity(self):
+        return self._maxOperations
+    
+    @capacity.setter
+    def capacity(self,maxOperations):
+        # Check maxOperations input value
+        self._maxOperations = int(maxOperations)
+        if self._maxOperations <= 0:
+            raise(ValueError("maxOperations must be a positive integer. Gave {}.".format(maxOperations)))
+    
+    def hasRoom(self):
+        """ Return True if more operations can be added without exceeding maximum. """
+        return self.size <= self._maxOperations
+        
     @property
     def isClosed(self):
         if not self._is_closed:
