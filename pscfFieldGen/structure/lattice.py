@@ -311,6 +311,22 @@ class Vector(object):
     def components(self):
         return np.array(self._components)
     
+    @components.setter
+    def components(self, comp):
+        """ 
+        Set vector components.
+        
+        Parameters
+        ----------
+        comp : 1D array-like
+            Must have the same number of elements as current components.
+        """
+        if not len(comp) == self._dim:
+            raise(ValueError("Length of components {} exceeds dim of vector".format(comp)))
+        self._components[:] = comp
+        self._cartesian_components = self._components @ self._lattice.basis
+        self._magnitude = np.linalg.norm(self._cartesian_components)
+    
     @property
     def lattice(self):
         return self._lattice.copy()
@@ -493,3 +509,82 @@ class Vector(object):
         """ When cast to an array, a vector returns its cartesian representation. """
         return self.cartesian
 
+class VectorList(object):
+    """ Class for storing large sets of Vectors on the same lattice. """
+    
+    def __init__(self, veclist, palloc=False, nvec=0, dim=1):
+        """
+        Initialize the vector list.
+        
+        Parameters
+        ----------
+        veclist : iterable of Vectors
+            The vectors being combined in the VectorList.
+            All Vectors in veclist must have the same lattice.
+        palloc : Boolean, default=False
+            True if nvec and dim are given for pre-allocation.
+        nvec : int, required if palloc==True
+            The number of vectors expected in the set. Allows for
+            pre-allocation of memory when full vector set is known.
+            Must be positive, non-zero.
+        dim : int, optional, either (2,3)
+            The dimensionality of the vectors. Allows for pre-allocation
+            of memory.
+        
+        Raises
+        ------
+        ValueError : 
+            If any vector in veclist does not match the lattice of
+            the others in the list.
+        ValueError : 
+            If nvec or dim are not acceptable values.
+        ValueError : 
+            if given value for dim does not match the input vectors.
+        """
+        init_components = False
+        self._nvec = 0
+        set_dim = False
+        self._dim = 1
+        set_lat = False
+        if palloc:
+            nvec = int(nvec)
+            if nvec <= 0:
+                raise(ValueError("nvec must be positive, nonzero; gave {}".format(nvec)))
+            dim = int(dim)
+            if not (dim == 2 or dim == 3):
+                raise(ValueError("dim must be either 2 or 3; gave {}".format(dim)))
+            self._dim = dim
+            set_dim = True
+            self._components = np.zeros((nvec,dim))
+            init_components = True
+        msg = "Incompatible Vector {} {}"
+        for v in veclist:
+            # type check
+            if not isinstance(v,Vector):
+                raise(TypeError("Instance of {} input with veclist".format(type(v).__name__)))
+            # dim check
+            if not set_dim:
+                self._dim == v.dim
+                set_dim = True
+            # lattice check
+            if not set_lat:
+                self._lattice = v.lattice
+                set_lat = True
+            # initialize components array (if not already)
+            if not init_components:
+                self._components = np.zeros((1,self._dim))
+                init_components = True
+            self.append(v)
+    
+    def append(v):
+        """ Append vector at end of VectorList. """
+        if not v.lattice == self._lattice:
+            raise(ValueError(msg.format("with lattice",v.lattice)))
+        if len(self._components) > self._nvec:
+            self._components[self._nvec,:] = v.components
+        else:
+            newrow = np.array([[*v.components]])
+            np.append( self._components, newrow, axis = 0 )
+        self._nvec += 1
+    
+    
