@@ -3,7 +3,12 @@ from copy import deepcopy
 import numpy as np
 
 class Lattice(object):
-    """ Object representing a crystallographic basis vector lattice"""
+    """ 
+    Object representing a crystallographic basis vector lattice.
+    
+    Lattice objects are designed to be immutable. 
+    Modification of a Lattice's internal data can cause side-effects.
+    """
     
     def __init__(self, dim, basis):
         """
@@ -11,7 +16,7 @@ class Lattice(object):
         
         Params:
         -------
-        dim: int, dim >= 2
+        dim: int in (2,3)
             Number of dimensions in the lattice.
         basis: numpy.ndarray
             Matrix (size: dim-by-dim) representation of basis vectors.
@@ -23,12 +28,13 @@ class Lattice(object):
         if dim not in (2,3):
             raise(ValueError("Lattice must be 2D or 3D"))
         self._dim = dim;
+        basis = np.array(basis)
         if not basis.shape == (dim, dim):
             raise(ValueError("Gave basis {} for dim {}".format(basis.shape,dim)))
         self._basis = basis;
         
         self._volume = np.linalg.det(self._basis)
-        self._metric_tensor = np.matmul(self.basis, self.basis.T)
+        self._metric_tensor = np.matmul(self._basis, self._basis.T)
         self._reciprocal_lattice = Lattice.getReciprocal(self)
     
     @classmethod
@@ -153,7 +159,7 @@ class Lattice(object):
         return basis
     
     def copy(self):
-        return Lattice(self._dim, self.basis)
+        return Lattice(self._dim, self._basis)
     
     ## Properties
     
