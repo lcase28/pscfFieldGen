@@ -35,7 +35,9 @@ class Lattice(object):
         
         self._volume = np.linalg.det(self._basis)
         self._metric_tensor = np.matmul(self._basis, self._basis.T)
-        self._reciprocal_lattice = Lattice.getReciprocal(self)
+        
+        reciprocalMetricTensor = np.linalg.inv(self._metric_tensor)
+        self._reciprocal_basis =  np.matmul(reciprocalMetricTensor, self._basis)
     
     @classmethod
     def latticeFromParameters(cls, dim, **kwargs):
@@ -209,15 +211,9 @@ class Lattice(object):
         """ The real-space metric tensor """
         return np.array(self._metric_tensor)
     
-    @staticmethod
-    def getReciprocal(lattice):
-        reciprocalMetricTensor = np.linalg.inv(lattice._metric_tensor)
-        reciprocalbasis =  np.matmul(reciprocalMetricTensor, lattice._basis)
-        return Lattice(lattice._dim, reciprocalbasis)
-    
     def reciprocalLattice(self):
         """ Lattice object for reciprocal lattice. """
-        return self._reciprocal_lattice.copy()
+        return Lattice(self._dim, self._reciprocal_basis)
     
     def as3D(self):
         """
@@ -238,7 +234,7 @@ class Lattice(object):
         return Lattice(3,ttmp)
     
     def isReciprocal(self,other):
-        return self._reciprocal_lattice == other
+        return self.reciprocalLattice() == other
     
     ## "Private" internal methods
     
