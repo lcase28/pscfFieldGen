@@ -468,8 +468,23 @@ class Vector(object):
         if not self._lattice == other._lattice:
             msg = "Incompatible lattice; unable to add {} and {}"
             raise(ValueError(msg.format(self,other)))
-        ctmp = a._components + b._components
-        return Vector(ctmp,a.lattice)
+        ctmp = self._components + other._components
+        return Vector(ctmp,self.lattice)
+    
+    def __sub__(self,other):
+        """ 
+        Subtract two vectors.
+        
+        Vectors must be expressed on the same lattice.
+        """
+        if not isinstance(other,Vector):
+            msg = "Unable to subtract objects of type 'Vector' and '{}'"
+            raise(TypeError(msg.format(type(other).__name__)))
+        if not self._lattice == other._lattice:
+            msg = "Incompatible lattice; unable to subtract {} and {}"
+            raise(ValueError(msg.format(self,other)))
+        ctmp = self._components - other._components
+        return Vector(ctmp,self.lattice)
     
     def __mul__(self,other):
         if isinstance(other,Vector):
@@ -489,12 +504,6 @@ class Vector(object):
     
     def __rmul__(self,other):
         return self * other
-    
-    def __matmul__(self,other): 
-        if not isinstance(other,Vector):
-            msg = "Operation @ not defined between 'Vector' and '{}'"
-            raise(TypeError(msg.format(type(other).__name__)))
-        return self.cross(other)
     
     def __len__(self):
         return self._dim
