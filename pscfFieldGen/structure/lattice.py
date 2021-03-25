@@ -290,8 +290,7 @@ class Vector(object):
         self._dim = self._lattice.dim
         
         # Compute secondary properties
-        self._cartesian_components = self._components @ self._lattice.basis
-        self._magnitude = np.linalg.norm(self._cartesian_components)
+        self._process_updated_components()
         
         # Assign instance versions of static methods
         self.dot = self._instance_dot
@@ -325,8 +324,7 @@ class Vector(object):
         if not len(comp) == self._dim:
             raise(ValueError("Length of components {} must match dim of vector".format(comp)))
         self._components = comp
-        self._cartesian_components = self._components @ self._lattice.basis
-        self._magnitude = np.linalg.norm(self._cartesian_components)
+        self._process_updated_components()
     
     @property
     def lattice(self):
@@ -524,9 +522,7 @@ class Vector(object):
                 if isinstance(i,slice):
                     raise(ValueError("Cannot interpret slice for Vectors"))
                 self._components[i] = value
-        # recompute values after update
-        self._cartesian_components = self._components @ self._lattice.basis
-        self._magnitude = np.linalg.norm(self._cartesian_components)
+        self._process_updated_components()
         
     def __eq__(self,other):
         if not isinstance(other,Vector):
@@ -545,4 +541,10 @@ class Vector(object):
     def __array__(self, *args, **kwargs):
         """ When cast to an array, a vector returns its cartesian representation. """
         return self.cartesian
-
+    
+    ## Private methods
+    def _process_updated_components(self):
+        # recompute values after update
+        self._cartesian_components = self._components @ self._lattice.basis
+        self._magnitude = np.linalg.norm(self._cartesian_components)
+        
