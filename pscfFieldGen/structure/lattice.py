@@ -528,6 +528,13 @@ class Vector(object):
         self._cartesian_components = self._components @ self._lattice.basis
         self._magnitude = np.linalg.norm(self._cartesian_components)
         
+    def __eq__(self,other):
+        if not isinstance(other,Vector):
+            msg = "Operator == unavailable between Vector and {}"
+            raise(TypeError(msg.format(type(other).__name__)))
+        if not self._lattice == other._lattice:
+            return False
+        return np.allclose(self._components, other._components)
     
     def __repr__(self):
         s = "< Vector {} on {} >"
