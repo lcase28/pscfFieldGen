@@ -105,11 +105,41 @@ class SymmetryOperation(object):
         dim : int
             2 if the operations is meant for plane-groups.
             3 if the operation is meand for space-groups.
-        matrix : 4x4 numpy array
-            The symmetry operation in matrix representation.
+        matrix : numpy.ndarray or list or tuple
+            If type numpy.ndarray, this should be a 4x4 matrix
+            representing the symmetry operation.
+            If a list or tuple, should contain two items:
+                0. pointOperation : 2D array-like
+                    The point symmetry operation in matrix form.
+                    Should be shape (dim,dim)
+                1. translation : 1D array-like
+                    The translation component of the symmetry
+                    operation. Should have len == dim.
         """
         self._dim = dim
-        self._matrix = np.array(matrix)
+        if isinstance(matrix, np.ndarray):
+            if not matrix.shape == (4,4):
+                msg = "Symmetry Operations matrices must have shape (4,4), not {}."
+                raise(ValueError(msg.format(matrix.shape)))
+            self._matrix = np.array(matrix)
+            self._point = np.array(matrix[0:dim,0:dim])
+            self._trans = np.array(matrix[0:dim,3])
+        elif isinstance(matrix,(list,tuple)):
+            pointOperation = matrix[0]
+            translation = matrix[1]
+            pointOp = np.array(pointOperation)
+            if not pointOp.shape == (dim,dim):
+                msg = "pointOperation {} has improper shape for {}D SymmetryOperation."
+                raise(ValueError(msg.format(pointOp,dim)))
+            self._point = pointOp
+            trans = np.array(translation)
+            if not ( len(trans) == dim and trans.shape == (dim,) ):
+                msg = "Translation {} has improper shape for {}D SymmetryOperation."
+                raise(ValueError(msg.format(trans,dim)))
+            self._trans = trans
+            self._matrix = np.zeros((4,4))
+            self._matrix[0:dim,0:dim] = self._point
+            self._matrix[0:dim,3] = self._trans
         self._capTranslation()
     
     @property
@@ -123,50 +153,74 @@ class SymmetryOperation(object):
     @property
     def pointOperator(self):
         """ The {dim}x{dim} point operation component. """
-        dim = self._dim
-        return self._matrix[:dim,:dim]
+        return np.array(self._point)
     
     @property
     def translationVector(self):
         """ The {dim}x1 translation vector of the operation. """
-        dim = self._dim
-        return self._matrix[:dim,-1]
+        return np.array(self._trans)
     
     def __mul__(self,other):
         return self.__matmul__(other)
+    
+    def __rmul__(self,other):
+        return self.__rmatmul__(other)
         
     def __matmul__(self, other):
-        if type(other) == type(self):
+        if isinstance(other,SymmetryOperation):
             if other._dim == self._dim:
-                matr = self._matrix @ other._matrix
-                return SymmetryOperation(self._dim, matr)
+                pt = self._point @ other._point
+                tr = (self._point @ other._trans) + self._trans
+                return SymmetryOperation(self._dim, (pt,tr))
             else:
                 raise(ValueError("Cannot multiply SymmetryOperations of differing dimensionality"))
         elif isinstance(other, GeneralPosition):
             if other.dim == self._dim:
                 gep = np.array(other)
-                #print(gep, type(gep))
-                if self._dim == 2:
-                    gepAug = np.array([*gep, 0, 1])
-                else:
-                    gepAug = np.array([*gep, 1])
-                #print(gepAug, type(gepAug))
-                #print(self._matrix, type(self._matrix))
-                result = self._matrix @ gepAug
-                result = result[0:self._dim]
+                result = (self._point @ gep) + self._trans
                 return GeneralPosition(self._dim, result, other.symbol_list)
             else:
                 raise(ValueError("Cannot multiply SymmetryOperation and GeneralPosition of different dimensions."))
         elif isinstance(other, np.ndarray):
             if len(other) == self._dim:
                 pt = np.array(other)
-                pt = pt.resize(4)
-                pt[3] = 1
-                res = self._matrix @ pt
-                res = res[0:len(other)]
+                res = (self._point @ pt) + self._trans
                 return res
             else:
                 raise(ValueError("Dimension mismatch"))
+        elif isinstance(other, Vector):
+            comp = (self._point @ other.components) + self._trans
+            return Vector(other.dim, comp, other.lattice)
+        else:
+            return NotImplemented
+    
+    def __rmatmul__(self, other):
+        if isinstance(other,SymmetryOperation):
+            return other.__matmul__(self)
+        elif isinstance(other, np.ndarray):
+            if len(other) == self._dim:
+                pt = np.array(other)
+                res = pt @ self._point
+                return res
+            else:
+                raise(ValueError("Dimension mismatch"))
+        elif isinstance(other, Vector):
+            comp = other.components @ self._point
+            return Vector(other.dim, comp, other.lattice)
+        else:
+            return NotImplemented
+    
+    def __rmod__(self,other):
+        if isinstance(other, np.ndarray):
+            if len(other) == self._dim:
+                pt = np.array(other)
+                res = pt @ self._point
+                return res
+            else:
+                raise(ValueError("Dimension mismatch"))
+        elif isinstance(other, Vector):
+            comp = other.components @ self._trans
+            return comp
         else:
             return NotImplemented
     
@@ -178,19 +232,18 @@ class SymmetryOperation(object):
             return np.allclose(self._matrix, other._matrix)
     
     def _capTranslation(self):
-        testupper = np.isclose(np.ones(3), self._matrix[0:3,3])
-        atol = 1E-8 * np.ones(3)
-        testlower = np.absolute(self._matrix[0:3,3]) <= atol
-        for i in range(3):
-            if self._matrix[i,3] >= 1 or testupper[i]:
-                self._matrix[i,3] -= 1
-            elif self._matrix[i,3] < 0 and not testlower[i]:
-                self._matrix[i,3] += 1
-            elif self._matrix[i,3] < 0 and testlower[i]:
-                self._matrix[i,3] = 0.0
-            #else:
-                # empty case
-                #print("component {} ok".format(i))
+        dim = self._dim
+        testupper = np.isclose(np.ones(dim), self._trans)
+        atol = 1E-8 * np.ones(dim)
+        testlower = np.absolute(self._trans) <= atol
+        for i in range(dim):
+            if self._trans[i] >= 1 or testupper[i]:
+                self._trans[i] -= 1
+            elif self._trans[i] < 0 and not testlower[i]:
+                self._trans[i] += 1
+            elif self._trans[i] < 0 and testlower[i]:
+                self._trans[i] = 0.0
+        self._matrix[0:dim,3] = self._trans
     
     @property
     def reverse(self):
@@ -252,11 +305,11 @@ class SymmetryOperation(object):
     
     @classmethod
     def getUnitTranslations(cls, dim):
-        op = np.eye(4)
         oplist = []
         for i in range(dim):
+            op = np.eye(4)
+            op[i,3] = 1
             symm = cls(dim,op)
-            symm._matrix[i,3] = 1
             oplist.append(symm)
         return oplist
 
@@ -269,11 +322,17 @@ class SymmetryGroup(object):
     can be set to bypass the closed-group enforcement with an optional
     argument, and the class will not become unstable if the group is
     not closed.
+    
+    For efficiency purposes, the capacity of a SymmetryGroup can not 
+    exceed 500. ( A finite value is required to avoid an infinite loop
+    when ensuring the group is closed - 500 is guaranteed sufficient
+    for crystallographic purposes, and was assumed generally sufficient
+    for any extraneous purposes. )
     """
     
     ## Constructors
     
-    def __init__(self, dim, ops, checkClosed=True, maxOperations=400):
+    def __init__(self, dim, ops, checkClosed=True, maxOperations=500):
         """
         Initialize a new SymmetryGroup instance.
         
@@ -343,30 +402,25 @@ class SymmetryGroup(object):
         filename : str or pathlib.Path
             The name of the file to read from.
         args, kwargs :
-            All optional arguments to the class constructor.
+            All other arguments to the class constructor.
         """
         filename = pathlib.Path(filename)
         filename = filename.resolve()
         
         def read_operation(stream, dim):
             # Read operation matrix from stream
-            # and return as 4x4 numpy array
-            out = np.zeros((4,4))
+            pt = np.zeros((dim,dim))
             # read point operation matrix
             for i in range(dim):
                 for j in range(dim):
                     val = next(stream)
-                    out[i][j] = str_to_num(val)
-            # set identity for 3rd dimension of 2D operations
-            if dim == 2:
-                out[2][2] = 1.0
-            # set identity for translation 
-            out[3][3] = 1.0
+                    pt[i,j] = str_to_num(val)
+            tr = np.zeros(dim)
             # read translation component of operation
             for i in range(dim):
                 val = next(stream)
-                out[i][3] = str_to_num(val)
-            return out
+                tr[i] = str_to_num(val)
+            return (pt, tr)
         
         with open(filename) as f:
             words = wordsGenerator(f)
@@ -410,6 +464,8 @@ class SymmetryGroup(object):
         self._maxOperations = int(maxOperations)
         if self._maxOperations <= 0:
             raise(ValueError("maxOperations must be a positive integer. Gave {}.".format(maxOperations)))
+        if self._maxOperations > 500:
+            raise(ValueError("maxOperations cannot exceed 500. Gave {}.".format(maxOperations)))
     
     def hasRoom(self):
         """ Return True if more operations can be added without exceeding maximum. """
@@ -527,6 +583,16 @@ class SymmetryGroup(object):
         if self._is_closed:
             return None
         
+        for op_one in self._ops:
+            for op_two in self._ops:
+                op_test = op_one @ op_two
+                try:
+                    success = self.addOperation(op_test)
+                except GroupTooLargeError as err:
+                    msg = "SymmetryGroup unable to close.\n{}".format(err.message)
+                    raise(GroupTooLargeError(err.maxsize, self, msg))
+                
+        
         # Repeat search as many times as necessary to no longer find
         # any new operations, up to remaining_searches
         addedNew = True
@@ -542,7 +608,7 @@ class SymmetryGroup(object):
                 j = 0
                 while j < self.size:
                     op_two = self.operation(j)
-                    op_test = op_one * op_two
+                    op_test = op_one @ op_two
                     try:
                         success = self.addOperation(op_test)
                     except GroupTooLargeError as err:
