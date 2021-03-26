@@ -10,7 +10,9 @@ class Lattice(object):
     Modification of a Lattice's internal data can cause side-effects.
     """
     
-    def __init__(self, dim, basis):
+    def __init__(   self, 
+                    dim, 
+                    basis ):
         """
         Generate a lattice object.
         
@@ -18,7 +20,7 @@ class Lattice(object):
         -------
         dim: int in (2,3)
             Number of dimensions in the lattice.
-        basis: numpy.ndarray
+        basis : array-likej
             Matrix (size: dim-by-dim) representation of basis vectors.
             Coordinates of each vector are defined relative to the
             standard basis (mutually orthogonal unit vectors).
@@ -28,16 +30,11 @@ class Lattice(object):
         if dim not in (2,3):
             raise(ValueError("Lattice must be 2D or 3D"))
         self._dim = dim;
-        basis = np.array(basis)
-        if not basis.shape == (dim, dim):
-            raise(ValueError("Gave basis {} for dim {}".format(basis.shape,dim)))
-        self._basis = basis;
-        
-        self._volume = np.linalg.det(self._basis)
-        self._metric_tensor = np.matmul(self._basis, self._basis.T)
-        
-        reciprocalMetricTensor = np.linalg.inv(self._metric_tensor)
-        self._reciprocal_basis =  np.matmul(reciprocalMetricTensor, self._basis)
+        self._update_basis(basis)
+        if self._dim == 2:
+            self._param_keys = ["a","b","gamma"]
+        else:
+            self._param_keys = ["a","b","c","alpha","beta","gamma"]
     
     @classmethod
     def latticeFromParameters(cls, dim, **kwargs):
@@ -172,34 +169,94 @@ class Lattice(object):
     @property
     def latticeParameters(self):
         """
-            Lattice parameters as list of lengths and angles.
-            3D: [a, b, c, alpha, beta, gamma]
-            2D: [a, b, gamma]
+        Lattice parameters as list of lengths and angles.
+        3D: [a, b, c, alpha, beta, gamma]
+        2D: [a, b, gamma]
         """
-        a = self.basis[0,:]
-        b = self.basis[1,:]
-        aMag = np.linalg.norm(a)
-        bMag = np.linalg.norm(b)
-        gamma = np.rad2deg( np.arccos( np.dot(a,b) / (aMag*bMag) ) )
-        if self.dim == 2:
-            return np.asarray([aMag, bMag, gamma])
-        elif self.dim == 3:
-            c = self.basis[2,:]
-            cMag = np.linalg.norm(c)
-            alpha = np.rad2deg( np.arccos( np.dot(b,c) / (bMag*cMag) ) )
-            beta = np.rad2deg( np.arccos( np.dot(a,c) / (aMag*cMag) ) )
-            return np.asarray([aMag, bMag, cMag, alpha, beta, gamma])
-        else:
-            return NotImplemented
+        return self.parameterList
+    
+    @property
+    def parameterList(self):
+        """
+        Lattice parameters as list of lengths and angles.
+        3D: [a, b, c, alpha, beta, gamma]
+        2D: [a, b, gamma]
+        """
+        return np.array( self._param_list )
+    
+    @parameterList.setter
+    def parameterList(self, newvals):
+        """
+        Lattice parameters as list of lengths and angles.
+        2D: [a, b, gamma]
+        3D: [a, b, c, alpha, beta, gamma]
+        """
+        newvals = np.array(newvals)
+        msg = "Gave {} parameters for {}D lattice requiring {}"
+        if self._dim == 2 and not len(newvals) == 3:
+            raise( ValueError( msg.format( len(newVals), 2, 3 ) ) )
+        if self._dim == 3 and not len(newvals) == 6:
+            raise( ValueError( msg.format( len(newVals), 3, 6 ) ) )
+        newParam = dict(zip(self._param_keys,newvals))
+        newBasis = Lattice.basisFromParameters(self._dim, **newParam)
+        self._update_basis(newBasis)
+        
+    @property
+    def parameterDict(self):
+        """
+        Lattice parameters as dict of name:value mappings.
+        2D keys: a, b, gamma
+        3D keys: a, b, c, alpha, beta, gamma
+        """
+        return dict(zip(self._param_keys,self._param_list))
+    
+    @parameterDict.setter
+    def parameterDict(self, newParams):
+        try:
+            newParams = dict(newParams)
+        except Exception as err:
+            msg = "Unable to cast {} to dict for parameterDict update."
+            raise Exception(msg.format(newParams)) from err
+        newBasis = Lattice.basisFromParameters(self._dim, **newParams)
+        self._update_basis(newBasis)
+    
+    def updateParameters(self, **paramArgs):
+        """ 
+        Update specific lattice parameters.
+        
+        Any lattice parameters not specified will not be updated.
+        
+        Parameters
+        ----------
+        a : real, optional
+            The length of the first basis vector.
+        b : real, optional
+            The length of the second basis vector.
+        c : real, optional
+            The length of the third basis vector.
+        alpha : real, optional
+            The angle (in degrees) between the basis vectors "b" and "c".
+        beta : real, optional
+            The angle (in degrees) between the basis vectors "a" and "c".
+        gamma : real, optional
+            The angle (in degrees) between the basis vectors "a" and "b".
+        """
+        d = self.parameterDict
+        d.update(paramArgs)
+        self.parameterDict = d
     
     @property
     def latticeVectors(self):
         """ Return lattice vectors as numpy.ndarray """
-        return np.array(self._basis)
+        return self.basis
     
     @property
     def basis(self):
         return np.array(self._basis)
+    
+    @basis.setter
+    def basis(self, newBasis):
+        self._update_basis(newBasis)
     
     @property
     def volume(self):
@@ -237,6 +294,43 @@ class Lattice(object):
         return self.reciprocalLattice() == other
     
     ## "Private" internal methods
+    
+    def _update_basis(self, newBasis):
+        """ 
+        Internal method to update basis and pre-computed
+        values.
+        """
+        dim = self._dim
+        basis = np.array(newBasis)
+        if not basis.shape == (dim, dim):
+            raise(ValueError("Gave basis shape {} for dim {}".format(basis.shape,dim)))
+        self._basis = basis;
+        
+        self._volume = np.linalg.det(self._basis)
+        self._metric_tensor = np.matmul(self._basis, self._basis.T)
+        self._update_parameters()
+        
+        reciprocalMetricTensor = np.linalg.inv(self._metric_tensor)
+        self._reciprocal_basis =  np.matmul(reciprocalMetricTensor, self._basis)
+        
+    def _update_parameters(self):
+        """ 
+        Internal method to re-calculate lattice parameters
+        after a basis update.
+        """
+        aMag = np.sqrt( self._metric_tensor[0,0] )
+        bMag = np.sqrt( self._metric_tensor[1,1] )
+        adotb = self._metric_tensor[0,1]
+        gamma = np.rad2deg( np.arccos( adotb / (aMag*bMag) ) )
+        if self.dim == 2:
+            self._param_list =  np.array([aMag, bMag, gamma])
+        elif self.dim == 3:
+            cMag = np.linalg.norm( self._metric_tensor[2,2] )
+            adotc = self._metric_tensor[0,2]
+            bdotc = self._metric_tensor[1,2]
+            alpha = np.rad2deg( np.arccos( bdotc / (bMag*cMag) ) )
+            beta = np.rad2deg( np.arccos( adotc / (aMag*cMag) ) )
+            self._param_list = np.array([aMag, bMag, cMag, alpha, beta, gamma])
     
     def __eq__(self, other):
         if not isinstance(other, Lattice):
@@ -286,7 +380,7 @@ class Vector(object):
         
         # store input values
         self._components = components
-        self._lattice = lattice
+        self._lattice = lattice.copy()
         self._dim = self._lattice.dim
         
         # Compute secondary properties
@@ -329,6 +423,72 @@ class Vector(object):
     @property
     def lattice(self):
         return self._lattice.copy()
+    
+    @lattice.setter
+    def lattice(self, newLattice):
+        if not isinstance(newLattice,Lattice):
+            raise(TypeError("A Vector's lattice must be an instance of Lattice"))
+        if not self._dim == newLattice.dim: 
+            raise(ValueError("A Vector's new lattice must be same dimension."))
+        self._lattice = newLattice.copy()
+        self._process_updated_lattice()
+    
+    def updateLattice(  self,
+                        basis = None,
+                        paramList = None,
+                        paramDict = None,
+                        **paramArgs ):
+        """ 
+        Change the lattice on which the vector is defined.
+        
+        The dimensionality of the vector cannot be changed.
+        
+        Updated lattice data can be passed in four forms, with
+        the expected format determined by the parameter names
+        to which data is passed. Parameters below are listed in
+        decreasing priority; parameter definitions also include
+        priority numbers, with lower priority number indicating
+        higher priority ( Priority 1 preferred over Priority 4 ).
+        If multiple formats are included, the update is only 
+        attempted with the highest-priority format included.
+        
+        Parameters
+        ----------
+        basis : array-like, optional, priority 1
+            The new basis for the lattice. Must be able to be
+            cast to a (dim-by-dim) numpy.ndarray. See Lattice
+            for more detail.
+        paramList : list-like, optional, priority 2
+            A list-like iterable of lattice parameters. If a
+            2D vector, should contain [a, b, gamma]. If a 3D
+            vector, should contain [a, b, c, alpha, beta, gamma].
+            See Lattice for more details.
+        paramDict : dict, optional, priority 3
+            A dict of "parameter name":value pairs.
+            A 2D vector requires entries for "a", "b", "gamma".
+            A 3D vector requires keys "a","b","c","alpha","beta","gamma".
+        a : real, optional, priority 4
+            The length of the first basis vector.
+        b : real, optional, priority 4
+            The length of the second basis vector.
+        c : real, optional, priority 4
+            The length of the third basis vector.
+        alpha : real, optional, priority 4
+            The angle (in degrees) between the basis vectors "b" and "c".
+        beta : real, optional, priority 4
+            The angle (in degrees) between the basis vectors "a" and "c".
+        gamma : real, optional, priority 4
+            The angle (in degrees) between the basis vectors "a" and "b".
+        """
+        if basis is not None:
+            self._lattice.basis = basis
+        elif paramList is not None:
+            self._lattice.parameterList = paramList
+        elif paramDict is not None:
+            self._lattice.parameterDict = paramDict
+        else:
+            self._lattice.updateParameters(**paramArgs)
+        self._process_updated_lattice()
     
     @property
     def cartesian(self):
@@ -462,8 +622,7 @@ class Vector(object):
         Vectors must be expressed on the same lattice.
         """
         if not isinstance(other,Vector):
-            msg = "Unable to add objects of type 'Vector' and '{}'"
-            raise(TypeError(msg.format(type(other).__name__)))
+            return NotImplemented
         if not self._lattice == other._lattice:
             msg = "Incompatible lattice; unable to add {} and {}"
             raise(ValueError(msg.format(self,other)))
@@ -477,8 +636,7 @@ class Vector(object):
         Vectors must be expressed on the same lattice.
         """
         if not isinstance(other,Vector):
-            msg = "Unable to subtract objects of type 'Vector' and '{}'"
-            raise(TypeError(msg.format(type(other).__name__)))
+            return NotImplemented
         if not self._lattice == other._lattice:
             msg = "Incompatible lattice; unable to subtract {} and {}"
             raise(ValueError(msg.format(self,other)))
@@ -490,19 +648,15 @@ class Vector(object):
             return self.dot(other)
         else:
             try:
-                other = int(other)
+                other = float(other)
             except:
-                try:
-                    other = float(other)
-                except:
-                    msg = "Operation * unavailable for types 'Vector' and '{}'."
-                    raise(msg.format(type(other).__name__))
+                return NotImplemented
             ctmp = other * self._components
             ltmp = self._lattice.copy()
             return Vector(ctmp, ltmp)
     
     def __rmul__(self,other):
-        return self * other
+        return self.__mul__(other)
     
     def __len__(self):
         return self._dim
@@ -516,18 +670,17 @@ class Vector(object):
         if isinstance(item,int):
             self._components[item] = value
         elif isinstance(item, slice):
-            raise(ValueError("Cannot interpret slice for Vectors"))
+            raise(ValueError("Cannot set slice for Vectors"))
         else:
             for i in item:
                 if isinstance(i,slice):
-                    raise(ValueError("Cannot interpret slice for Vectors"))
+                    raise(ValueError("Cannot set slice for Vectors"))
                 self._components[i] = value
         self._process_updated_components()
         
     def __eq__(self,other):
         if not isinstance(other,Vector):
-            msg = "Operator == unavailable between Vector and {}"
-            raise(TypeError(msg.format(type(other).__name__)))
+            return NotImplemented
         if not self._lattice == other._lattice:
             return False
         return np.allclose(self._components, other._components)
@@ -544,7 +697,11 @@ class Vector(object):
     
     ## Private methods
     def _process_updated_components(self):
-        # recompute values after update
+        self._cartesian_components = self._components @ self._lattice.basis
+        self._magnitude = np.linalg.norm(self._cartesian_components)
+    
+    def _process_updated_lattice(self):
+        self._dim = self._lattice.dim
         self._cartesian_components = self._components @ self._lattice.basis
         self._magnitude = np.linalg.norm(self._cartesian_components)
         

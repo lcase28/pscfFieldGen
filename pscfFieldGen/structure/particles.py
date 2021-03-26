@@ -7,67 +7,8 @@ from pscfFieldGen.structure.lattice import Lattice, Vector
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
-import numba
 import numpy as np
 from scipy.special import j1
-
-@numba.jit("double(double,double)", nopython=True, cache=True)
-def sphereFormFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
-    """ 
-    Returns the form factor amplitude for a spherical particle.
-    
-    Parameters
-    ----------
-    qNorm : real
-        The magnitude of the wave-vector.
-    zero_q_magnitude : real
-        If R not specified, this is taken to be the volume
-        of the sphere. Otherwise, it is simply treated as
-        a scaling factor.
-    
-    Returns
-    -------
-    f_of_q : scalar
-        The form factor at q.
-    """
-    R = ( ( 3 * zero_q_magnitude ) / (4 * np.pi) ) ** (1./3)
-    qR = qNorm * R
-    ff = zero_q_magnitude * 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
-    return ff
-
-@numba.jit("double(double,double)",forceobj=True, cache=True)
-def circleFormFactorAmplitude(qNorm = 0.0, zero_q_magnitude = 1.0):
-    """ 
-    Returns the form factor amplitude for a 2D circular particle.
-    
-    Parameters
-    ----------
-    qNorm : real
-        The magnitude of the wave-vector.
-    zero_q_magnitude : real
-        The area of the circle.
-    
-    Returns
-    -------
-    f_of_q : scalar
-        The form factor at q.
-    """
-    R = np.sqrt( zero_q_magnitude / np.pi )
-    qR = qNorm * R
-    bessarg = 2.0 * qR
-    bess = j1(bessarg)
-    ff = (2.0 / (qR**3)) * (qR - bess)
-    ff = zero_q_magnitude*ff
-    return ff
-
-def defaultFormFactor(dim):
-    """ Return default form factor for dimensionality dim """
-    if dim == 2:
-        return circleFormFactorAmplitude
-    elif dim == 3:
-        return sphereFormFactorAmplitude
-    else:
-        raise(ValueError("dim must be either 2 or 3. Gave {}".format(dim)))
 
 class ParticlePosition(Vector):
     """ Sub-class of Vector, specialized for particle positions. """
@@ -151,7 +92,7 @@ class ParticleBase(ABC):
         
         Parameters
         ----------
-        position : array-like
+        position : array-like, or ParticlePosition
             The position of the new particle.
         
         Returns
@@ -271,9 +212,31 @@ class ParticleSet(object):
     ParticleSet objects hold a collection of ParticleBase-like objects,
     subject to the requirement that each particle is unique and non-conflicting.
     This means that only one particle is at each position in space.
+    
+    All Particles must be defined on the same lattice.
     """
-    def __init__(self, startSet = None):
+    def __init__(self, startSet = None, lattice = None):
+        """
+        Constructor for ParticleSet Instances.
+        
+        Parameters
+        ----------
+        startSet : iterable of ParticleBase, Optional
+            The set of particles to initialize the set with.
+        lattice : Lattice
+            The lattice on which each particle is expected to
+            be defined.
+        
+        Raises
+        ------
+        ValueError : 
+            If any particle in startSet is not defined on the
+            same lattice as others.
+        """
         self._particles = []
+        self._lattice = None
+        if isinstance(lattice, Lattice):
+            self._lattice = lattice.copy()
         if startSet is not None:
             for p in startSet:
                 self.addParticle(p)
@@ -304,7 +267,21 @@ class ParticleSet(object):
         
         If newParticle conflicts with a current particle,
         can either reject newParticle, or replace the original particle.
+        
+        Any new Particle must be defined on the same lattice.
+        
+        Parameters
+        ----------
+        newParticle
         """
+        if not isinstance(newParticle, ParticleBase):
+            msg = "Cannot add object {} of type {} to ParticleSet."
+            raise(TypeError(msg.format(newParticle, type(newParticle))))
+        if self._lattice is None:
+            self._lattice = newParticle.lattice
+        if not newParticle.position._lattice == self._lattice:
+            msg = "New Particle {} does not match ParticleSet lattice {}."
+            raise(ValueError(msg.format(newParticle, self._lattice)))
         if self.containsMatch(newParticle):
             return False
         hasConflict, conflictParticle = self.containsConflict(newParticle)
@@ -315,6 +292,7 @@ class ParticleSet(object):
         if hasConflict and not replace_on_conflict:
             return False
         self._particles.append(newParticle)
+        return True
     
     @property
     def nparticles(self):
@@ -334,27 +312,8 @@ class ParticleSet(object):
             buildStr += "\n{}".format(p)
         return buildStr
         
-class ScatteringParticle(ParticleBase):
-    """ Particle with associated Form Factor. """
-    def __init__(self, position, formFactor=None):
-        super().__init__("Micelle", position)
-        if formFactor is None:
-            self._formFactor = defaultFormFactor(self.dim)
-        else:
-            self._formFactor = formFactor
-    
-    def formFactorAmplitude(qnorm, vol, smear):
-        return self._formFactor(qnorm, vol, smear)
-    
-    @property
-    def formFactor(self):
-        return self._formFactor
-    
-    def _output_data(self):
-        out = "{}, form factor = {}".format(super()._output_data(), self._formFactor.__name__)
-        return out
-
 class Sphere(ParticleBase):
+    """ Particle with associated Form Factor. """
     
     def __init__(self, position):
         super().__init__("Sphere", position)
@@ -367,6 +326,7 @@ class Sphere(ParticleBase):
         return ff
         
 class Cylinder2D(ParticleBase):
+    """ Particle with associated Form Factor. """
     
     def __init__(self, position):
         super().__init__("Cylinder2D", position)
