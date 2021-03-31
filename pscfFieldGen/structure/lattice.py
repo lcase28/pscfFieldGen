@@ -1,13 +1,28 @@
 # Imports
 from copy import deepcopy
 import numpy as np
+import math
+
+## Helper Functions
+def cosd(x):
+    """Return the cosine of x (measured in degrees). """
+    return math.cos(math.radians(x))
+
+def sind(x):
+    """Return the sine of x (measured in degrees). """
+    return math.sin(math.radians(x))
+
+def acosd(x):
+    """Return (in degrees) the arccosine of x. """
+    return math.degrees(math.acos(x))
+    
+def asind(x):
+    """Return (in degrees) the arcsine of x. """
+    return math.degrees(math.asin(x))
 
 class Lattice(object):
     """ 
     Object representing a crystallographic basis vector lattice.
-    
-    Lattice objects are designed to be immutable. 
-    Modification of a Lattice's internal data can cause side-effects.
     """
     
     def __init__(   self, 
@@ -75,20 +90,19 @@ class Lattice(object):
         return cls(dim, basis)
             
     @classmethod
-    def basisFromParameters(cls, dim, **kwargs):
+    def basisFromParameters(cls, dim, 
+                            a=None, b=None, c=None,
+                            alpha=None, beta=None, gamma=None):
         """
-            Return a set of basis vectors.
+            Return a set of basis vectors in standard orientation.
             
             Params:
             -------
             dim: int, in set {2, 3}
                 The dimensionality of the resulting lattice
-            
-            Keyword Params:
-            ---------------
-            a:  float, required
+            a:  float
                 Magnitude of first basis vector.
-            b:  float, required
+            b:  float
                 Magnitude of second basis vector.
             c:  float, (only if dim == 3)
                 Magnitude of third basis vector.
@@ -124,37 +138,46 @@ class Lattice(object):
             TypeError: If input arguments are non-numeric.
             ValueError: If dim not one of {2, 3}, or invalid lattice parameters.
         """
-        # extract all parameters
-        a = kwargs.get("a",None)
-        b = kwargs.get("b",None)
-        c = kwargs.get("c",None)
-        alpha = kwargs.get("alpha",None)
-        beta = kwargs.get("beta",None)
-        gamma = kwargs.get("gamma",None)
-        
         # check inputs
         if (a is None) or (b is None) or (gamma is None):
-            raise TypeError("Required lattice parameter is missing.")
-            
-        if dim == 3 and ((c is None) or (alpha is None) or (beta is None)):
-            raise TypeError("Missing lattice parameter for 3D lattice")
+            raise(ValueError("Required lattice parameter is missing."))
+        a = float(a)
+        b = float(b)
+        gamma = float(gamma)
         
         # initialize basis
         basis = np.zeros((dim,dim))
         
         # Complete common calculations
-        gammaRad = np.deg2rad(gamma)
+        cg = cosd(gamma)
         basis[0,0] = a
-        basis[1,0] = b*np.cos(gammaRad)
-        basis[1,1] = b*np.sin(gammaRad)
+        basis[1,0] = b * cg
+        basis[1,1] = b * cg
         
         # Additional 3D calculations
         if dim == 3:
-            alphaRad = np.deg2rad(alpha)
-            betaRad = np.deg2rad(beta)
-            basis[2,0] = c*np.cos(betaRad)
-            basis[2,1] = c*np.cos(alphaRad)*np.sin(gammaRad)
-            basis[2,2] = np.sqrt( c**2 - basis[2,0]**2 - basis[2,1]**2)
+            if (c is None) or (alpha is None) or (beta is None):
+                raise(ValueError("Required lattice parameter is missing."))
+            c = float(c)
+            alpha = float(alpha)
+            beta = float(beta)
+            
+            # Trig Functions
+            ca = cosd(alpha)
+            cb = cosd(beta)
+            sb = sind(beta)
+            sg = sind(gamma)
+            
+            # Secondary Values
+            unit_vol = np.sqrt( 1.0 + 2.0*ca*cb*cg - ca**2 - cb**2 - cg**2 )
+            cr = sg/(c*unit_vol) # length of reciprocal lattice vector *c*
+            car = (cb*cg - ca)/(sb*sg) # cosine of reciprocal angle *alpha*
+            sar = math.sqrt(1.0 - car*car) # sine of reciprocal angle *alpha*
+            
+            # Finish Updating Basis
+            basis[2,0] = c * cb
+            basis[2,1] = -car / sar / cr
+            basis[2,2] = 1.0 / cr
         return basis
     
     def copy(self):
@@ -293,6 +316,21 @@ class Lattice(object):
     def isReciprocal(self,other):
         return self.reciprocalLattice() == other
     
+    def isSimilar(self,other):
+        """ Return True if Lattices are identical within a rotation. 
+        
+        'Similar' lattices are those which have the same lattice parameters,
+        but are not necessarily in the standard orientation. In such a case,
+        The basis vectors of the two lattices differ only by a rotation in
+        space.
+        """
+        if not isinstance(other, Lattice):
+            msg = "Cannot determine similarity of {} with Lattice"
+            raise(TypeError(msg.format(type(other).__name__)))
+        if not np.allclose(self._param_list, other._param_list):
+            return False
+        return np.allclose(self._metric_tensor, other._metric_tensor)
+    
     ## "Private" internal methods
     
     def _update_basis(self, newBasis):
@@ -304,9 +342,15 @@ class Lattice(object):
         basis = np.array(newBasis)
         if not basis.shape == (dim, dim):
             raise(ValueError("Gave basis shape {} for dim {}".format(basis.shape,dim)))
+        
         self._basis = basis;
         
         self._volume = np.linalg.det(self._basis)
+        if abs(self._volume) < 1.0e-8:
+            raise(ValueError("Basis vectors are degenerate."))
+        if self._volume < 0.0:
+            raise(ValueError("Basis is not right-handed."))
+        
         self._metric_tensor = np.matmul(self._basis, self._basis.T)
         self._update_parameters()
         
@@ -321,15 +365,15 @@ class Lattice(object):
         aMag = np.sqrt( self._metric_tensor[0,0] )
         bMag = np.sqrt( self._metric_tensor[1,1] )
         adotb = self._metric_tensor[0,1]
-        gamma = np.rad2deg( np.arccos( adotb / (aMag*bMag) ) )
+        gamma = acosd( adotb / (aMag*bMag) )
         if self.dim == 2:
             self._param_list =  np.array([aMag, bMag, gamma])
         elif self.dim == 3:
-            cMag = np.linalg.norm( self._metric_tensor[2,2] )
+            cMag = np.sqrt( self._metric_tensor[2,2] )
             adotc = self._metric_tensor[0,2]
             bdotc = self._metric_tensor[1,2]
-            alpha = np.rad2deg( np.arccos( bdotc / (bMag*cMag) ) )
-            beta = np.rad2deg( np.arccos( adotc / (aMag*cMag) ) )
+            alpha = acosd( bdotc / (bMag*cMag) )
+            beta = acosd( adotc / (aMag*cMag) )
             self._param_list = np.array([aMag, bMag, cMag, alpha, beta, gamma])
     
     def __eq__(self, other):
@@ -346,9 +390,6 @@ class Lattice(object):
             s = "< 2D Lattice with parameters {:.3f}, {:.3f}, {:.3f} >"
         return s.format(*self.latticeParameters)
     
-    def __hash__(self):
-        return hash(self.latticeParameters) | super().hash()
-        
     def __array__(self, *args, **kwargs):
         """ returns an ndarray. Each row is a lattice vector. """
         return np.array(self.latticeVectors, *args, *kwargs)
@@ -537,6 +578,11 @@ class Vector(object):
             atmp = a._cartesian_components
             btmp = b._cartesian_components
             return atmp @ btmp
+        elif a._lattice.isSimilar(b._lattice):
+            mt = a._lattice.metricTensor
+            atmp = a._components
+            btmp = b._components
+            return atmp @ mt @ btmp
         elif a._lattice.isReciprocal(b._lattice):
             atmp = a._components
             btmp = b._components
