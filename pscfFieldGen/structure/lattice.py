@@ -538,6 +538,10 @@ class Vector(object):
     
     ## Operations
     
+    def copy(self):
+        """ A copy of the Vector instance. """
+        return Vector(self.components, self.lattice)
+    
     def asCartesian(self):
         """ Return new Vector object representing this vector on cartesian lattice. """
         return Vector(self.cartesian, cartesianLattice(self.dim))
