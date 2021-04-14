@@ -88,6 +88,29 @@ class ParticleBase(ABC):
         self._position = deepcopy(position)
         self._dim = len(self._position)
     
+    @abstractmethod
+    def fromFile(self, wordstream, entryKey):
+        """ Create a Particle Object from file input.
+        
+        Parameters
+        ----------
+        wordstream : generator
+            Generator splitting the file into words, and returning
+            them one at a time.
+        entrykey : string
+            The key marking off the start of the particle's input
+            section. Proper value depends on the class.
+        
+        Raises
+        ------
+        ValueError : 
+            When entryKey does not match that expected for the class.
+        """
+        pass
+        if not self.isEntryKey(self,entryKey):
+            msg = "Entry Key '{}' does not match key for {}."
+            raise(ValueError(msg.format(entryKey, type(self).__name__)))
+    
     def replicate_at_position(self, newPosition):
         """
         Create and return a new ParticleBase at new position.
@@ -127,7 +150,8 @@ class ParticleBase(ABC):
     
     @property
     def position(self):
-        return self._position
+        """ Position of the Particle as a ParticlePosition object. """
+        return self._position.copy()
     
     @position.setter
     def position(self, newPosition):
@@ -157,6 +181,20 @@ class ParticleBase(ABC):
             if not len(npos) == self.dim:
                 raise(ValueError("Dimension mismatch in Particle Position."))
             self._position.components = npos
+    
+    @property
+    def lattice(self):
+        """ Wrapper for the ParticlePosition.lattice property. """
+        return self._position.lattice
+    
+    @lattice.setter
+    def lattice(self, newLattice):
+        """ Wrapper for the ParticlePosition.lattice property. """
+        self._position.lattice = newLattice
+    
+    def updateLattice(self, *args, **kwargs):
+        """ Wrapper for the Vector.updateLattice method. """
+        self._position.updateLattice(*args,**kwargs)
     
     @abstractmethod
     def formFactorAmplitude(self, q, scaling_factor, *args, **kwargs):
@@ -291,6 +329,13 @@ class ParticleSet(object):
         if startSet is not None:
             for p in startSet:
                 self.addParticle(p)
+        if self._lattice is None:
+            if self.nparticles == 0:
+                msg = "If lattice is not explicitly set, at least one particle must be included."
+                raise(ValueError(msg))
+            else:
+                msg = "An unexpected internal error occurred. Program must terminate."
+                raise(RuntimeError(msg))
     
     def containsMatch(self, testParticle):
         """
@@ -329,8 +374,9 @@ class ParticleSet(object):
             msg = "Cannot add object {} of type {} to ParticleSet."
             raise(TypeError(msg.format(newParticle, type(newParticle))))
         if self._lattice is None:
+            # If lattice not set on initialization, take lattice from first particle added.
             self._lattice = newParticle.lattice
-        if not newParticle.position._lattice == self._lattice:
+        if not newParticle.position.lattice == self._lattice:
             msg = "New Particle {} does not match ParticleSet lattice {}."
             raise(ValueError(msg.format(newParticle, self._lattice)))
         if self.containsMatch(newParticle):
@@ -346,12 +392,94 @@ class ParticleSet(object):
         return True
     
     @property
+    def dim(self):
+        return self._lattice.dim
+    
+    @property
     def nparticles(self):
         return len(self._particles)
     
     @property
     def particles(self):
         return deepcopy(self._particles)
+    
+    @property
+    def lattice(self):
+        """ The lattice on which the ParticleSet members are defined. """
+        return self._lattice.copy()
+    
+    @lattice.setter
+    def lattice(self, newLattice):
+        """ Update the lattice for the full ParticleSet. """
+        if not isinstance(newLattice,Lattice):
+            raise(TypeError("A ParticleSet's lattice must be an instance of Lattice"))
+        if not self._dim == newLattice.dim: 
+            raise(ValueError("A ParticleSet's new lattice must be same dimension."))
+        self._lattice = newLattice.copy()
+        for p in self._particles:
+            p.lattice = self._lattice
+    
+    def updateLattice(  self,
+                        basis = None,
+                        paramList = None,
+                        paramDict = None,
+                        **paramArgs ):
+        """ 
+        Change the lattice on which the vector is defined.
+        
+        The dimensionality of the vector cannot be changed.
+        
+        Updated lattice data can be passed in four forms, with
+        the expected format determined by the parameter names
+        to which data is passed. Parameters below are listed in
+        decreasing priority; parameter definitions also include
+        priority numbers, with lower priority number indicating
+        higher priority ( Priority 1 preferred over Priority 4 ).
+        If multiple formats are included, the update is only 
+        attempted with the highest-priority format included.
+        
+        Parameters
+        ----------
+        basis : array-like, optional, priority 1
+            The new basis for the lattice. Must be able to be
+            cast to a (dim-by-dim) numpy.ndarray. See Lattice
+            for more detail.
+        paramList : list-like, optional, priority 2
+            A list-like iterable of lattice parameters. If a
+            2D vector, should contain [a, b, gamma]. If a 3D
+            vector, should contain [a, b, c, alpha, beta, gamma].
+            See Lattice for more details.
+        paramDict : dict, optional, priority 3
+            A dict of "parameter name":value pairs.
+            A 2D vector requires entries for "a", "b", "gamma".
+            A 3D vector requires keys "a","b","c","alpha","beta","gamma".
+        a : real, optional, priority 4
+            The length of the first basis vector.
+        b : real, optional, priority 4
+            The length of the second basis vector.
+        c : real, optional, priority 4
+            The length of the third basis vector.
+        alpha : real, optional, priority 4
+            The angle (in degrees) between the basis vectors "b" and "c".
+        beta : real, optional, priority 4
+            The angle (in degrees) between the basis vectors "a" and "c".
+        gamma : real, optional, priority 4
+            The angle (in degrees) between the basis vectors "a" and "b".
+        """
+        if basis is not None:
+            self._lattice.basis = basis
+        elif paramList is not None:
+            self._lattice.parameterList = paramList
+        elif paramDict is not None:
+            self._lattice.parameterDict = paramDict
+        else:
+            self._lattice.updateParameters(**paramArgs)
+        for p in self._particles:
+            p.lattice = self._lattice
+    
+    def __iter__(self):
+        """ Returns iterator over the particles in the set. """
+        return iter(self.particles)
     
     def __str__(self):
         return "< {} with {} particles >".format(type(self).__name__, self.nparticles)
@@ -369,6 +497,48 @@ class Sphere(ParticleBase):
     def __init__(self, position):
         super().__init__("Sphere", position)
     
+    def fromFile(self, wordstream, entrykey, lattice):
+        """ Create a Sphere from file input.
+        
+        Parameters
+        ----------
+        wordstream : util.stringTools.FileParser
+            Generator splitting the file into words, and returning
+            them one at a time.
+        entrykey : string, 'Sphere{'
+            The key marking off the start of the particle's input
+            section. Proper value is 'Sphere{'. Argument intended
+            as a check on calling method.
+        lattice : Lattice
+            The Lattice on which the system is being defined.
+        
+        Raises
+        ------
+        ValueError : 
+            When entryKey does not match that expected for the class.
+            When required Keys are missing, or in incorrect order.
+        """
+        if not entryKey == "Sphere{":
+            msg = "Entry Key '{}' does not match key for {}."
+            raise(ValueError(msg.format(entryKey, type(self).__name__)))
+        
+        word = next(wordstream) # check for position
+        if not word.lower() == "position":
+            msg = "Sphere expected keyword 'position'; got {}."
+            raise(ValueError(msg.format(word)))
+        coords = np.zeros(lattice.dim)
+        for i in range(lattice.dim):
+            coords[i] = wordstream.next_float()
+        position = ParticlePosition(coords, lattice)
+        
+        word = next(wordstream) # check for close of Sphere{ } block
+        if not word == "}":
+            msg = "Sphere expected end of block '}'; got {}."
+            raise(ValueError(msg.format(word)))
+         
+        out = Sphere(position)
+        return out
+    
     def formFactorAmplitude(self, q, volume):
         qNorm = q.magnitude
         R = ( ( 3 * volume ) / (4 * np.pi) ) ** (1./3)
@@ -377,10 +547,52 @@ class Sphere(ParticleBase):
         return ff
         
 class Cylinder2D(ParticleBase):
-    """ Particle with associated Form Factor. """
+    """ Cylinder with axis perpendicular to 2D plane (Circular Disk). """
     
     def __init__(self, position):
         super().__init__("Cylinder2D", position)
+    
+    def fromFile(self, wordstream, entrykey, lattice):
+        """ Create a Cylinder from file input.
+        
+        Parameters
+        ----------
+        wordstream : util.stringTools.FileParser
+            Generator splitting the file into words, and returning
+            them one at a time.
+        entrykey : string, 'Cylinder2D{'
+            The key marking off the start of the particle's input
+            section. Proper value is 'Cylinder2D{'. Argument intended
+            as a check on calling method.
+        lattice : Lattice
+            The Lattice on which the system is being defined.
+        
+        Raises
+        ------
+        ValueError : 
+            When entryKey does not match that expected for the class.
+            When required Keys are missing, or in incorrect order.
+        """
+        if not entryKey == "Cylinder2D{":
+            msg = "Entry Key '{}' does not match key for {}."
+            raise(ValueError(msg.format(entryKey, type(self).__name__)))
+        
+        word = next(wordstream) # check for position
+        if not word.lower() == "position":
+            msg = "Cylinder2D expected keyword 'position'; got {}."
+            raise(ValueError(msg.format(word)))
+        coords = np.zeros(lattice.dim)
+        for i in range(lattice.dim):
+            coords[i] = wordstream.next_float()
+        position = ParticlePosition(coords, lattice)
+        
+        word = next(wordstream) # check for close of Sphere{ } block
+        if not word == "}":
+            msg = "Cylinder2D expected end of block '}'; got {}."
+            raise(ValueError(msg.format(word)))
+         
+        out = Cylinder2D(position)
+        return out
     
     def formFactorAmplitude(self, q, volume):
         """ 
@@ -406,4 +618,32 @@ class Cylinder2D(ParticleBase):
         ff = (2.0 / (qR**3)) * (qR - bess)
         ff = area * ff
         return ff
+
+entry_key_map = {   "Sphere{"       :   Sphere, \
+                    "Cylinder2D{"   :   Cylinder2D }
+
+def isParticleKey(entryKey):
+    """ Return True if valid entryKey is given. """
+    return entryKey in entry_key_map
+
+def readParticleFromFile(wordstream, entryKey, lattice):
+    """ Return Particle object read from file.
+    
+    Type of Particle is chosen to correspond to 
+    the last value read from the stream.
+    
+    Parameters
+    ----------
+    wordstream : util.stringTools.FileParser
+        The data stream from the input file.
+    entryKey : string
+        The entry key triggering the call.
+    lattice : Lattice
+    """
+    if not isParticleKey(entryKey):
+        msg = "No Particle Type associated with key {}"
+        raise(ValueError(msg.format(entryKey)))
+    cls = entry_key_map.get(entryKey)
+    return cls.fromFile(wordstream, entryKey, lattice)
+    
     
