@@ -151,6 +151,7 @@ class ParamFile(ParamComposite):
         else:
             for i in range(npoly):
                 self.Mixture.Polymer[i] = Polymer(self.Mixture.Polymer[i])
+        self._N_cell_param, self._cell_param = self._parse_cell_params()
     
     @property
     def dim(self):
@@ -174,4 +175,41 @@ class ParamFile(ParamComposite):
         except(IndexError):
             return 2
             pass
+    
+    __nCellParamRef = { (1,'lamellar')      :   1, \
+                        (2,'square')        :   1, \
+                        (2,'hexagonal')     :   1, \
+                        (2,'rectangular')   :   2, \
+                        (2,'oblique')       :   3, \
+                        (3,'cubic')         :   1, \
+                        (3,'tetragonal')    :   2, \
+                        (3,'orthorhombic')  :   3, \
+                        (3,'monoclinic')    :   4, \
+                        (3,'hexagonal')     :   2, \
+                        (3,'trigonal')      :   2, \
+                        (3,'triclinic')     :   6    }
+    
+    def _parse_cell_params(self):
+        crys = self.file.unitCell.value(0)
+        nparam = self.__class__.__nCellParamRef.get( (self.dim, crys) )
+        param = [ self.file.unitCell.value(i+1) for i in range(nparam) ]
+        return nparam, np.array(param)
+    
+    @property
+    def N_cell_param(self):
+        return self._N_cell_param
+    
+    @property
+    def cell_param(self):
+        return self._cell_param
+    
+    @cell_param.setter
+    def cell_param(self, val):
+        if not len(val) == self.N_cell_param:
+            msg = "Expected {} cell params; got {}, {}."
+            raise(ValueError(msg.format(self.N_cell_param, len(val), val)))
+        for i in range(self.N_cell_param):
+            self._cell_param[i] = val[i]
+            self.file.unitCell.value[i+1] = val[i]
+    
     

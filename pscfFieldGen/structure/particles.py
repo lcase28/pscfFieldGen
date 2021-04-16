@@ -497,7 +497,8 @@ class Sphere(ParticleBase):
     def __init__(self, position):
         super().__init__("Sphere", position)
     
-    def fromFile(self, wordstream, entrykey, lattice):
+    @classmethod
+    def fromFile(cls, wordstream, entrykey, lattice):
         """ Create a Sphere from file input.
         
         Parameters
@@ -536,7 +537,7 @@ class Sphere(ParticleBase):
             msg = "Sphere expected end of block '}'; got {}."
             raise(ValueError(msg.format(word)))
          
-        out = Sphere(position)
+        out = cls(position)
         return out
     
     def formFactorAmplitude(self, q, volume):
@@ -552,7 +553,8 @@ class Cylinder2D(ParticleBase):
     def __init__(self, position):
         super().__init__("Cylinder2D", position)
     
-    def fromFile(self, wordstream, entrykey, lattice):
+    @classmethod
+    def fromFile(cls, wordstream, entrykey, lattice):
         """ Create a Cylinder from file input.
         
         Parameters
@@ -591,7 +593,7 @@ class Cylinder2D(ParticleBase):
             msg = "Cylinder2D expected end of block '}'; got {}."
             raise(ValueError(msg.format(word)))
          
-        out = Cylinder2D(position)
+        out = cls(position)
         return out
     
     def formFactorAmplitude(self, q, volume):

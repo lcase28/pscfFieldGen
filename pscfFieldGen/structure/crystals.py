@@ -49,7 +49,8 @@ class BasisCrystal(object):
             self._basis = ParticleSet(particles, lattice = testLattice)
         self._core_options = core_options
     
-    def fromFile(self, wordstream, entrykey, param):
+    @classmethod
+    def fromFile(cls, wordstream, entrykey, param):
         """
         Return an instance of MotifCrystal from a file input.
         
@@ -90,7 +91,7 @@ class BasisCrystal(object):
             else:
                 msg = "Unrecognized Key '{}' in MotifCrystal{{...}} block."
                 raise(ValueError(msg.format(word)))
-        return BasisCrystal(particles, lattice, core_options)
+        return cls(particles, lattice, core_options)
     
     def particlePositions(self):
         """ Iterator over particle positions """
@@ -251,7 +252,8 @@ class MotifCrystal(BasisCrystal):
         basisParticles = self._space_group.applyToAll(self._motif, self._motif.particles)
         self._basis = ParticleSet(basisParticles)
     
-    def fromFile(self, wordstream, entrykey, param):
+    @classmethod
+    def fromFile(cls, wordstream, entrykey, param):
         """
         Return an instance of MotifCrystal from a file input.
         
@@ -295,7 +297,7 @@ class MotifCrystal(BasisCrystal):
             else:
                 msg = "Unrecognized Key '{}' in MotifCrystal{{...}} block."
                 raise(ValueError(msg.format(word)))
-        return MotifCrystal(spaceGroup, particles, lattice, core_options)
+        return cls(spaceGroup, particles, lattice, core_options)
     
     @BasisCrystal.lattice.setter
     def lattice(self, newLattice):
@@ -319,47 +321,32 @@ class MotifCrystal(BasisCrystal):
         buildstr += "\nFrom Motif {}".format(self._motif.particleList())
         return buildstr
 
-def buildCrystal(style, N_particles, positions, lattice, **kwargs):
-    """
-    Initialize and return a crystal object.
+_entry_key_map = {  "BasisCrystal{" :   BasisCrystal, \
+                    "MotifCrystal{" :   MotifCrystal }
+
+def isCrystalKey(entryKey):
+    """ Return True if valid entryKey is given. """
+    return entryKey in _entry_key_map
+
+def readCrystalFromFile(wordstream, entrykey, param):
+    """ Return Crystal object read from file.
+    
+    Type of crystal is chosen based on entrykey.
     
     Parameters
     ----------
-    style : string matching 'motif' or 'basis'
-        A string flag identifying whether the particle set is complete ('basis')
-        or needs to be built from symmetry ('motif')
-    N_particles : int
-        The number of particle positions in the position set.
-    positions : numpy.ndarray
-        The set of particle positions with each row representing the fractional coordinates
-        of one particle. Array dimensions should be N_particle-by-2 for 2D systems,
-        and N_particles-by-3 for 3D systems.
-    lattice : structure.Lattice
-        The lattice on which the crystal is defined.
-    
-    Keyword Parameters
-    ------------------
-    formFactor : Class exposing the ParticleForm interface.
-        The scattering form factor for the particle. If omitted, a default is used.
-    group_name : string
-        The name of the space group.
-    crystal_system : string
-        The name of the crystal system the space group is in.
-    space_group : structure.symmetry.SpaceGroup
-        If style == 'motif', this input is required. It is the space group representing the
-        symmetry of the crystal.
+    wordstream : util.stringTools.FileParser
+        The data stream from the input file.
+    entryKey : string
+        The entry key triggering the call.
+    param : ParamFile
+        The parameter file on which the structure
+        is based.
     """
-    initSet = ParticleSet()
-    formFactor = kwargs.get("formFactor", None)
-    for i in range(N_particles):
-        p = ScatteringParticle(positions[i,:], formFactor)
-        initSet.addParticle(p)
-    if style == "basis":
-        return CrystalBase(lattice, initSet)
-    else:
-        groupName = kwargs.get("group_name",None)
-        crystalSystem = kwargs.get("crystal_system",None)
-        space_group = SpaceGroup(lattice.dim, crystalSystem, groupName)
-        return CrystalMotif(space_group, initSet, lattice)
-    
+    if not isCrystalKey(entrykey):
+        msg = "No Crystal Type associated with key {}."
+        raise(ValueError(msg.format(entrykey)))
+    cls = _entry_key_map.get(entrykey)
+    return cls.fromFile(wordstream,entrykey,param)
+
 
