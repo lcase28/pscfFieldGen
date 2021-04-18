@@ -2,6 +2,7 @@
 from pathlib import Path
 import re
 from fractions import Fraction
+from pscfFieldGen.util.tracing import TraceLevel, TRACER
 
 def str_to_num(stringNum):
     """
@@ -63,7 +64,7 @@ def wordsGenerator(stringIterable):
 class FileParser:
     """ Class to parse a file word-by-word with type-specific access. """
     
-    def __init__(self, fname, trace=False):
+    def __init__(self, fname):
         """ Initialize FileParser.
         
         Parameters
@@ -71,7 +72,6 @@ class FileParser:
         fname : string, Pathlib.path
             The path to the file to be parsed.
         """
-        self._trace = trace
         self._fname = fname
         self._file_obj = open(fname, 'r')
         self._words = wordsGenerator(self._file_obj)
@@ -94,12 +94,19 @@ class FileParser:
         if self._terminated:
             raise(StopIteration)
         self._last_word = self._next_word
-        self._next_word = next(self._words)
+        try:
+            self._next_word = next(self._words)
+        except StopIteration:
+            self._next_word = None
+            self._terminated = True
+        TRACER.trace("Token '{}' read from file.".format(self._last_word),TraceLevel.ECHO)
         return self._last_word
     
     def next_string(self):
         """ Increment iterator and return next value as string. """
-        return next(self)
+        out = next(self)
+        TRACER.trace("Token '{}' returned as string.".format(out),TraceLevel.DETAIL)
+        return out
     
     def next_int(self):
         """ Increment iterator, but return next value as int.
@@ -108,7 +115,7 @@ class FileParser:
         """
         nextStr = next(self)
         out = int(nextStr)
-        self._echo(out, "(int)")
+        TRACER.trace("Token '{}' returned as int {}.".format(nextStr,out),TraceLevel.DETAIL)
         return out
     
     def next_float(self):
@@ -118,7 +125,7 @@ class FileParser:
         """
         nextStr = next(self)
         out = float(nextStr)
-        self._echo(out, "(float)")
+        TRACER.trace("Token '{}' returned as float {}.".format(nextStr,out),TraceLevel.DETAIL)
         return out
     
     def next_number(self):
@@ -128,7 +135,7 @@ class FileParser:
         """
         nextStr = next(self)
         out = str_to_num(nextStr)
-        self._echo(out, "(number)"
+        TRACER.trace("Token '{}' returned as number {}.".format(nextStr,out),TraceLevel.DETAIL)
         return out
     
     def next_try_number(self):
@@ -136,17 +143,13 @@ class FileParser:
         nextstr = next(self)
         try:
             out = str_to_num(nextstr)
-            self._echo(out, "(number)"
+            TRACER.trace("Token '{}' returned as number {}.".format(nextStr,out),TraceLevel.DETAIL)
         except ValueError:
             out = nextstr
-            self._echo(out, "(string)"
+            TRACER.trace("Token '{}' returned as string.".format(out),TraceLevel.DETAIL)
         return out
     
     def __str__(self):
         formstr = "< FileParser of '{}' at {}:{} >"
         return formstr.format(self._fname, self._count, self._next_word)
-    
-    def _echo(self, out, descr=""):
-        if self._trace:
-            msg = "FileParser word {}: '{}', as {}{}."
-            print(msg.format(self._count, self._last_word, out, descr))
+

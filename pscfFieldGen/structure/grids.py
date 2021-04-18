@@ -2,6 +2,7 @@ import math
 import numpy as np
 
 from pscfFieldGen.structure.lattice import Lattice, Vector
+from pscfFieldGen.util.tracing import debug
 
 
 def getKgrid(ngrid):
@@ -150,24 +151,31 @@ def kgridIterator(ngrid, fromKgrid=False):
         *** Note: if grid is 1-Dimensional, return values are integer
         indices, rather than arrays.
     """
+    _fn_ = "structure.grids.kgridIterator"
     if fromKgrid:
         kgrid = np.array(ngrid)
         ngrid = getNgrid(kgrid)
     else:
         ngrid = np.array(ngrid)
         kgrid = getKgrid(ngrid)
+    debug(_fn_,"ngrid = {}".format(ngrid))
+    debug(_fn_,"kgrid = {}".format(kgrid))
     dim = len(ngrid)
+    debug(_fn_,"dim = {}".format(dim))
     if dim == 1:
         for i in range(kgrid[0]):
+            debug(_fn_,"i={}".format(i))
             yield i
     elif dim == 2:
         for i in range(kgrid[0]):
             for j in range(kgrid[1]):
+                debug(_fn_,"i={}, j={}".format(i,j))
                 yield miller_to_brillouin( np.array([i,j]), ngrid )
     elif dim == 3:
         for i in range(kgrid[0]):
             for j in range(kgrid[1]):
                 for k in range(kgrid[2]):
+                    debug(_fn_,"i={}, j={}, k={}".format(i,j,k))
                     yield miller_to_brillouin( np.array([i,j,k]), ngrid )
     else:
         raise(ValueError("positionIterator only valid for ngrid of 1-,2-,and 3-dimensional grids"))
@@ -176,10 +184,13 @@ def miller_to_brillouin(G, ngrid, fromKgrid=False):
     """
     Shift miller-indexed wavevector into first Brillouin zone.
     """
+    _fn_ = "structure.grids.miller_to_brillouin"
     ngrid = np.array(ngrid)
     if fromKgrid:
         ngrid = getNgrid(ngrid)
+    debug(_fn_, "ngrid = {}".format(ngrid))
     G = np.array(G)
+    debug(_fn_, "miller = {}".format(G))
     out= np.zeros_like(G)
     dim = len(G)
     dshift = dim - 1
@@ -190,6 +201,7 @@ def miller_to_brillouin(G, ngrid, fromKgrid=False):
                 out[i] = G[i] - ngrid[i]
             else:
                 out[i] = G[i]
+    debug(_fn_, "brillouin = {}".format(out))
     return out
 
 class IterableWavevector(Vector):
@@ -216,12 +228,11 @@ class IterableWavevector(Vector):
             The real-space lattice.
         """
         self._generator = kgridIterator(ngrid)
-        init_components = next(self._generator)
         if not isinstance(lattice, Lattice):
             msg = "Argument 'lattice' must be of type Lattice, not {}."
             raise(TypeError(msg.format(type(lattice).__name__)))
-        lat = lattice.reciprocalLattice
-        super().__init__(init_components, lat)
+        lat = lattice.reciprocalLattice()
+        super().__init__(np.zeros(lat.dim), lat)
     
     def __next__(self):
         self.components = next(self._generator)

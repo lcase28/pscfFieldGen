@@ -1,12 +1,25 @@
 # Imports
+from pscfFieldGen.util.tracing import debug
 from copy import deepcopy
 import numpy as np
 import math
 
+## Debug Functions
+
 ## Helper Functions
+_EXACT_COSD = {
+        0.0 : +1.0,   60.0 : +0.5,   90.0 : 0.0,  120.0 : -0.5,
+      180.0 : -1.0,  240.0 : -0.5,  270.0 : 0.0,  300.0 : +0.5
+}
+_EXACT_ACOSD = {
+       +1.0 : 0.0, +0.5 : 60.0, 0.0 : 90.0, -0.5 : 120.0
+}
 def cosd(x):
     """Return the cosine of x (measured in degrees). """
-    return math.cos(math.radians(x))
+    rv = _EXACT_COSD.get(x % 360.0, None)
+    if rv is None:
+        rv = math.cos(math.radians(x))
+    return rv
 
 def sind(x):
     """Return the sine of x (measured in degrees). """
@@ -14,7 +27,10 @@ def sind(x):
 
 def acosd(x):
     """Return (in degrees) the arccosine of x. """
-    return math.degrees(math.acos(x))
+    rv = _EXACT_ACOSD.get(x, None)
+    if rv is None:
+        rv = math.degrees(math.acos(x))
+    return rv
     
 def asind(x):
     """Return (in degrees) the arcsine of x. """
@@ -42,14 +58,18 @@ class Lattice(object):
             Row i ( elements in basis[i,:] ) corresponds to lattice basis
             vector i.
         """
+        _fn_ = "lattice.__init__"
         if dim not in (2,3):
             raise(ValueError("Lattice must be 2D or 3D"))
+        debug(_fn_,"received dim={}",dim)
+        debug(_fn_,"received basis={}",basis)
         self._dim = dim;
         self._update_basis(basis)
         if self._dim == 2:
             self._param_keys = ["a","b","gamma"]
         else:
             self._param_keys = ["a","b","c","alpha","beta","gamma"]
+        debug(_fn_,"set self._param_keys={}",self._param_keys)
     
     @classmethod
     def latticeFromParameters(cls, dim, **kwargs):
@@ -86,7 +106,9 @@ class Lattice(object):
         TypeError: If input arguments are non-numeric.
         ValueError: If dim not one of {2, 3}, or invalid lattice parameters.
         """
+        debug("lattice.latticeFromParameters","received dim={}, params={}",dim,kwargs)
         basis = cls.basisFromParameters(dim, **kwargs)
+        debug("lattice.latticeFromParameters","received basis={}",basis)
         return cls(dim, basis)
             
     @classmethod
@@ -138,6 +160,14 @@ class Lattice(object):
             TypeError: If input arguments are non-numeric.
             ValueError: If dim not one of {2, 3}, or invalid lattice parameters.
         """
+        _fn_ = "lattice.basisFromParameters"
+        debug(_fn_,"received dim={}",dim)
+        debug(_fn_,"received a={}",a)
+        debug(_fn_,"received b={}",b)
+        debug(_fn_,"received c={}",c)
+        debug(_fn_,"received alpha={}",alpha)
+        debug(_fn_,"received beta={}",beta)
+        debug(_fn_,"received gamma={}",gamma)
         # check inputs
         if (a is None) or (b is None) or (gamma is None):
             raise(ValueError("Required lattice parameter is missing."))
@@ -147,12 +177,17 @@ class Lattice(object):
         
         # initialize basis
         basis = np.zeros((dim,dim))
+        debug(_fn_,"Basis initialized to: {}",basis)
         
         # Complete common calculations
         cg = cosd(gamma)
+        debug(_fn_,"cos(gamma)={}",cg)
+        sg = sind(gamma)
+        debug(_fn_,"sin(gamma)={}",sg)
         basis[0,0] = a
         basis[1,0] = b * cg
-        basis[1,1] = b * cg
+        basis[1,1] = b * sg
+        debug(_fn_,"Basis after common setup: {}",basis)
         
         # Additional 3D calculations
         if dim == 3:
@@ -164,24 +199,34 @@ class Lattice(object):
             
             # Trig Functions
             ca = cosd(alpha)
+            debug(_fn_,"cos(alpha)={}",ca)
             cb = cosd(beta)
+            debug(_fn_,"cos(beta)={}",cb)
             sb = sind(beta)
+            debug(_fn_,"sin(beta)={}",sb)
             sg = sind(gamma)
+            debug(_fn_,"sin(gamma)={}",sg)
             
             # Secondary Values
             unit_vol = np.sqrt( 1.0 + 2.0*ca*cb*cg - ca**2 - cb**2 - cg**2 )
+            debug(_fn_,"unit_vol={}",unit_vol)
             cr = sg/(c*unit_vol) # length of reciprocal lattice vector *c*
+            debug(_fn_,"c*={}",cr)
             car = (cb*cg - ca)/(sb*sg) # cosine of reciprocal angle *alpha*
+            debug(_fn_,"cos(alpha*)={}",car)
             sar = math.sqrt(1.0 - car*car) # sine of reciprocal angle *alpha*
+            debug(_fn_,"sin(alpha*)={}",sar)
             
             # Finish Updating Basis
             basis[2,0] = c * cb
             basis[2,1] = -car / sar / cr
             basis[2,2] = 1.0 / cr
+            debug(_fn_,"Basis after 3D setup: {}",basis)
+            
         return basis
     
     def copy(self):
-        return Lattice(self._dim, self._basis)
+        return deepcopy(self)
     
     ## Properties
     
@@ -314,7 +359,9 @@ class Lattice(object):
         return Lattice(3,ttmp)
     
     def isReciprocal(self,other):
-        return self.reciprocalLattice() == other
+        if not self.dim == other.dim:
+            return False
+        return np.allclose(self._reciprocal_basis, other._basis)
     
     def isSimilar(self,other):
         """ Return True if Lattices are identical within a rotation. 
@@ -338,24 +385,32 @@ class Lattice(object):
         Internal method to update basis and pre-computed
         values.
         """
+        _fn_ = "lattice._update_basis"
         dim = self._dim
+        debug(_fn_,"stored local dim={}",dim)
+        debug(_fn_,"received newBasis={}",newBasis)
         basis = np.array(newBasis)
+        debug(_fn_,"stored local basis={}",basis)
         if not basis.shape == (dim, dim):
             raise(ValueError("Gave basis shape {} for dim {}".format(basis.shape,dim)))
         
         self._basis = basis;
         
         self._volume = np.linalg.det(self._basis)
+        debug(_fn_,"calculated volume={}",self._volume)
         if abs(self._volume) < 1.0e-8:
             raise(ValueError("Basis vectors are degenerate."))
         if self._volume < 0.0:
             raise(ValueError("Basis is not right-handed."))
         
         self._metric_tensor = np.matmul(self._basis, self._basis.T)
+        debug(_fn_,"calculated metric tensor={}",self._metric_tensor)
         self._update_parameters()
         
         reciprocalMetricTensor = np.linalg.inv(self._metric_tensor)
+        debug(_fn_,"calculated reciprocal metric tensor={}",reciprocalMetricTensor)
         self._reciprocal_basis =  np.matmul(reciprocalMetricTensor, self._basis)
+        debug(_fn_,"calculated reciprocal basis={}",self._reciprocal_basis)
         
     def _update_parameters(self):
         """ 
@@ -390,6 +445,9 @@ class Lattice(object):
             s = "< 2D Lattice with parameters {:.3f}, {:.3f}, {:.3f} >"
         return s.format(*self.latticeParameters)
     
+    def __str__(self):
+        return self.__repr__()
+    
     def __array__(self, *args, **kwargs):
         """ returns an ndarray. Each row is a lattice vector. """
         return np.array(self.latticeVectors, *args, *kwargs)
@@ -414,6 +472,7 @@ class Vector(object):
         """
         # ensure types and compatibility of inputs
         components = np.array(components).flatten()
+        debug("Vector.__init__","received lattice {}",lattice)
         if not isinstance(lattice,Lattice):
             raise(TypeError("A Vector's lattice must be an instance of Lattice"))
         if not len(components) == lattice.dim:
@@ -540,7 +599,7 @@ class Vector(object):
     
     def copy(self):
         """ A copy of the Vector instance. """
-        return Vector(self.components, self.lattice)
+        return deepcopy(self)
     
     def asCartesian(self):
         """ Return new Vector object representing this vector on cartesian lattice. """

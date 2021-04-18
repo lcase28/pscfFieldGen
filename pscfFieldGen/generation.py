@@ -3,17 +3,18 @@ from pscfFieldGen.structure import (
     Lattice,
     BasisCrystal,
     MotifCrystal,
-    SpaceGroup,
-    ParticleBase,
-    ScatteringParticle,
-    buildCrystal )
+    SpaceGroup )
 from pscfFieldGen.structure.grids import(
     getKgridCount,
-    IterableWaveVector )
-from pscfFieldGen.structure.network import NetworkFieldBasis
+    IterableWavevector )
+from pscfFieldGen.structure.crystals import (
+    isCrystalKey,
+    readCrystalFromFile )
+from pscfFieldGen.structure.network import NetworkCrystal
 from pscfFieldGen.filemanagers import PscfParam, PscfppParam
-from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
+from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator, FileParser
 import pscfFieldGen.util.contexttools as contexttools
+from pscfFieldGen.util.tracing import TraceLevel, TRACER, debug
 import pscfFieldGen.filemanagers.pscf as pscf
 
 # Standard Library Imports
@@ -22,7 +23,6 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 from enum import Enum
 import itertools
-import numba
 import numpy as np
 import scipy as sp
 import subprocess
@@ -31,16 +31,7 @@ import re
 import time
 import warnings
 
-def seed_calculator(calculator,paramWrap, cache=True):
-    if isinstance(calculator, ParticleFieldBase):
-        _seed_particle_calculator(calculator, paramWrap, cache)
-
-def _seed_particle_calculator(calculator, paramWrap,cache):
-    ngrid = paramWrap.ngrid
-    lat = paramWrap.getLattice()
-    calculator.seedCalculator(ngrid,lat)
-
-def generate_field_file(param, calculator, kgridFileName, core=0):
+def generate_field_file(param, calculator, kgridFileName):
     """
     From the given ParamFile (param), and FieldCalculator (calculator),
     generate an initial guess field file at kgridFileName.
@@ -56,17 +47,11 @@ def generate_field_file(param, calculator, kgridFileName, core=0):
         The FieldCalculator used to do the field calculation.
     kgridFileName : pathlib.Path
         The path and file name to which to write the resulting field file.
-    core : integer
-        The index identifying the monomer to be placed in the core of the particles.
     """
     kgridFileName = kgridFileName.resolve()
     monFrac = param.getMonomerFractions()
-    if isinstance(calculator, ParticleFieldBase):
-        interface = param.getInterfaceWidth(core)
-        ngrid = param.ngrid
-        calculator.seedCalculator(ngrid)
-        newField = calculator.to_kgrid(monFrac, ngrid, interfaceWidth=interface, coreindex=core)
-        # Create clean field file if needed.
+    if isinstance(calculator, ParticleGenerator):
+        newField = calculator.to_kgrid(param)
         kgrid = param.cleanWaveFieldFile()
         kgrid.fields = newField
         kgrid.write(kgridFileName.open(mode='w'))
@@ -77,12 +62,12 @@ def generate_field_file(param, calculator, kgridFileName, core=0):
         star.write(kgridFileName.open(mode='w'))
     elif isinstance(calculator,NetworkFieldGen):
         root = kgridFileName.parent
-        newField = calculator.to_rgrid(monFrac,param.file,core,root)
+        newField = calculator.to_rgrid(monFrac,param.file,root)
         rgrid = param.cleanCoordFieldFile()
         rgrid.fields = newField
         rgrid.write(kgridFileName.open('w'))
 
-def read_input_file(filepath, trace=False, omissionWarnings=False):
+def read_input_file(filepath, trace=TraceLevel.NONE):
     """
     Read an input file for pscfFieldGen and return data for field generation.
     
@@ -90,24 +75,18 @@ def read_input_file(filepath, trace=False, omissionWarnings=False):
     ----------
     filepath : pathlib.Path
         The path to the input file. File will be opened and closed during call.
-    trace : Boolean (optional, default False)
-        If True, a detailed trace of the read will be printed to standard output.
-        If False, the call will run silently except for errors and warnings.
-    omissionWarnings : Boolean (optional, default False)
-        If True, warn the caller about optional data omitted from the file.
-        If False, omitted data will be silently set to a default.
+    trace : TraceLevel
+        The TraceLevel to use as a filter in output.
     
     Returns
     -------
     param : pscfFieldGen.filemanagers.ParamFile derivative
         The parameter file specified in the file. Exact class is chosen
         based on software specification in the file.
-    calculator : pscfFieldGen.generation.UniformParticleField
+    calculator : ParticleGenerator, LamellarGenerator, NetworkGenerator
         The calculator object seeded with necessary structural information.
     outFile : pathlib.Path
         The filepath specified in the input file to output field data.
-    core_monomer : int
-        The monomer id of the monomer intended to go in the particle cores.
     
     Raises
     ------
@@ -118,11 +97,16 @@ def read_input_file(filepath, trace=False, omissionWarnings=False):
     """
     SOFTWARE_MAP = { "pscf" : PscfParam, "pscfpp" : PscfppParam }
     
+    TRACER.filterLevel = trace
+    
     # Parse input file
-    with filepath.open(mode='r') as cmdFile:
-        # Parse file into "words"
-        words = wordsGenerator(cmdFile)
-        
+    with FileParser(filepath) as words:
+        # Block opener
+        word = next(words)
+        if not word == "PscfFieldGen{":
+            msg = "Expected key 'PscfFieldGen{{'; got '{}'"
+            raise(ValueError(msg.format(word)))
+        TRACER.trace("Reading pscfFieldGen input file.",TraceLevel.EVENT)
         # Software
         word = next(words)
         if word == 'software':
@@ -131,291 +115,39 @@ def read_input_file(filepath, trace=False, omissionWarnings=False):
             if ParamFile is None:
                 raise(ValueError("Invalid software ({}) given.".format(software)))
             data = software
-            if trace:
-                print('{}\n\t{}'.format(word, data))
+            TRACER.trace("Using software {}.".format(software),TraceLevel.ALL)
         else:
             raise(ValueError("Input keyword 'software' must be specified first."))
-        
         # Parameter File
         word = next(words)
         if word == 'parameter_file':
             filename = next(words)
             param = ParamFile.fromFileName(filename)
             data = filename
-            if trace:
-                print('{}\n\t{}'.format(word, data))
+            TRACER.trace("Using Parameter File {}.".format(data),TraceLevel.ALL)
         else:
             raise(ValueError("Input keyword 'parameter_file' must be specified after software."))
-        
         # Output File
         word = next(words)
         if word == 'output_file':
             outfilestring = next(words)
             outFile = pathlib.Path(outfilestring)
             data = outFile
-            if trace:
-                print('{}\n\t{}'.format(word, data))
+            TRACER.trace("Will write field to file {}.".format(data),TraceLevel.ALL)
         else:
-            raise(ValueError("Input keyword 'output_file' must be specified after 'parameter_file'."))
-        
+            raise(ValueError("Keyword 'output_file' must be specified after 'parameter_file'."))
         # Structure Type
         word = next(words)
-        if word == 'structure_type':
-            struct_type = next(words)
-            data = struct_type
-            if trace:
-                print('{}\n\t{}'.format(word, data))
-            if struct_type == 'particle':
-                calculator, core_mon = _read_particle_input(words,param,trace,omissionWarnings)
-            elif struct_type == 'network':
-                calculator, core_mon = _read_network_input(words,param,trace,omissionWarnings)
-            elif struct_type == 'lamellar':
-                calculator = _read_lamellar_input(words, param, trace, omissionWarnings)
-                core_mon = 0
-            else:
-                raise(ValueError("Unrecognized structure_type = {}".format(struct_type)))
+        if isGeneratorKey(word):
+            calculator = readGeneratorFromFile(words,word,param)
         else:
-            raise(ValueError("Keyword 'structure_type' must be specified before structure data."))
-            
-    return param, calculator, outFile, core_mon
-
-def _read_particle_input(words, param, trace=False, omissionWarnings=False):
-    """
-    Read an input file for pscfFieldGen and return data for field generation.
-    
-    Parameters
-    ----------
-    words : WordGenerator
-        A stream outputting the string components of the input file.
-    trace : Boolean (optional, default False)
-        If True, a detailed trace of the read will be printed to standard output.
-        If False, the call will run silently except for errors and warnings.
-    omissionWarnings : Boolean (optional, default False)
-        If True, warn the caller about optional data omitted from the file.
-        If False, omitted data will be silently set to a default.
-    
-    Returns
-    -------
-    calculator : pscfFieldGen.generation.UniformParticleField
-        The calculator object seeded with necessary structural information.
-    core_monomer : int
-        The monomer id of the monomer intended to go in the particle cores.
-    
-    Raises
-    ------
-    ValueError : 
-        When a required input is omitted from the input file.
-        Specifically the software, parameter_file, N_particles, 
-        and particle_positions fields
-    """
-    # Set initial flags
-    hasStyle = False
-    hasCore = False
-    nparticle = -1
-    hasPositions = False
-    
-    # Set default values
-    input_style = 'motif'
-    core_monomer = 0
-    
-    # Parse remainder of input file
-    for word in words:
-        if word == 'coord_input_style':
-            input_style = next(words)
-            if input_style == 'motif' or input_style == 'basis':
-                hasStyle = True
-                data = input_style
-            else:
-                raise(ValueError("Invalid option, {}, given for coord_input_style".format(input_style)))
-        elif word == 'core_monomer':
-            core_monomer = int(next(words))
-            if core_monomer >= 0:
-                hasCore = True
-                data = core_monomer
-            else:
-                raise(ValueError("core_monomer must be a non-negative integer. Given {}.".format(core_monomer)))
-        elif word == 'N_particles':
-            nparticle = str_to_num(next(words))
-            if nparticle <= 0:
-                raise(ValueError("Invalid N_particles given ({}). Must be >= 1.".format(nparticle)))
-            else:
-                data = nparticle
-        elif word == 'particle_positions':
-            if nparticle <= 0:
-                raise(ValueError("N_particles must be specified before particle_positions"))
-            else:
-                numData = param.dim * nparticle
-                positionList = np.array( [str_to_num(next(words)) for i in range(numData)] )
-                partPositions = np.reshape(positionList, (nparticle, param.dim))
-                data = partPositions
-                hasPositions = True
-        elif word == 'finish':
-            #do nothing
-            data = ''
-            doneFlag = True
-        else:
-            raise(NotImplementedError("No operation has been set for keyword {}.".format(word)))
-        # if trace requested, echo input file as read
-        if trace:
-            print('{}\n\t{}'.format(word, data))
-    
-    # Check for presence of required data
-    if nparticle <= 0:
-        raise(ValueError("Input keyword 'N_particles' must be specified"))
-    if not hasPositions:
-        raise(ValueError("Particle coordinates must be specified with keyword 'particle_positions'."))
-    
-    # Warn of absence of optional data and state assumptions.
-    if omissionWarnings:
-        if not hasStyle:
-            warnings.warn(RuntimeWarning("coord_input_style not specified. 'motif' assumed."))
-        if not hasCore:
-            warnings.warn(RuntimeWarning("core_monomer not specified. Assuming monomer 0."))
-    
-    # Create Lattice Object
-    if trace:
-        print("\nCreating System Lattice")
-    latticeParams = param.latticeParameters
-    dim = param.dim
-    lattice = Lattice.latticeFromParameters(dim, **latticeParams)
-    if trace:
-        print("\t\t{}".format(lattice))
-    
-    # Create Crystal Object
-    if trace:
-        print("\nCreating Crystal\n")
-    groupname = param.group_name
-    crystalsystem = param.crystal_system
-    crystal = buildCrystal( input_style, 
-                            nparticle, 
-                            partPositions, 
-                            lattice, 
-                            group_name=groupname,
-                            crystal_system=crystalsystem )
-    if trace:
-        print("Crystal being generated:")
-        print(crystal.longString)
-    
-    # Create Calculator Object
-    if trace:
-        print("\nSetting Up Calculator")
-    calculator = UniformParticleField(crystal)
-    
-    return calculator, core_monomer
-
-def _read_lamellar_input(words, param, trace, omissionWarnings):
-    """
-    Read an input file for pscfFieldGen and return data for field generation.
-    
-    Parameters
-    ----------
-    words : Stream of single-word streams
-        The stream of input file data.
-    trace : Boolean (optional, default False)
-        If True, a detailed trace of the read will be printed to standard output.
-        If False, the call will run silently except for errors and warnings.
-    omissionWarnings : Boolean (optional, default False)
-        If True, warn the caller about optional data omitted from the file.
-        If False, omitted data will be silently set to a default.
-    
-    Returns
-    -------
-    calculator : pscfFieldGen.generation.UniformParticleField
-        The calculator object seeded with necessary structural information.
-    
-    Raises
-    ------
-    ValueError : 
-        When Parameter File dimensionality > 1
-    """
-    word = next(words)
-    if not word == 'finish':
-        raise(ValueError("Expected 'finish' flag"))
-    if not param.dim == 1:
-        raise(ValueError("Lamellar Field requires 1-dimensional parameter file"))
-    return LamellarFieldGen()
-
-def _read_network_input(words, param, trace, omissionWarnings):
-    """
-    Read an input file for pscfFieldGen and return data for field generation.
-    
-    Parameters
-    ----------
-    filepath : pathlib.Path
-        The path to the input file. File will be opened and closed during call.
-    trace : Boolean (optional, default False)
-        If True, a detailed trace of the read will be printed to standard output.
-        If False, the call will run silently except for errors and warnings.
-    omissionWarnings : Boolean (optional, default False)
-        If True, warn the caller about optional data omitted from the file.
-        If False, omitted data will be silently set to a default.
-    
-    Returns
-    -------
-    param : pscfFieldGen.filemanagers.ParamFile derivative
-        The parameter file specified in the file. Exact class is chosen
-        based on software specification in the file.
-    calculator : pscfFieldGen.generation.UniformParticleField
-        The calculator object seeded with necessary structural information.
-    outFile : pathlib.Path
-        The filepath specified in the input file to output field data.
-    core_monomer : int
-        The monomer id of the monomer intended to go in the particle cores.
-    
-    Raises
-    ------
-    ValueError : 
-        When a required input is omitted from the input file.
-        Specifically the software, parameter_file, N_particles, 
-        and particle_positions fields
-    """
-    hasParam = False
-    hasField = False
-    hasCore = False
-    
-    core_monomer = 0
-    
-    # Parse input file
-    for word in words:
-        if word == 'network_parameter_file':
-            filename = next(words)
-            fieldParam = pscf.ParamFile(filename)
-            hasParam = True
-            data = filename
-        elif word == 'network_star_file':
-            filename = next(words)
-            fieldFile = pscf.SymFieldFile(filename)
-            hasField = True
-            data = filename
-        elif word == 'core_monomer':
-            core_monomer = int(next(words))
-            if core_monomer >= 0:
-                hasCore = True
-                data = core_monomer
-            else:
-                raise(ValueError("core_monomer must be a non-negative integer. Given {}.".format(core_monomer)))
-        elif word == 'finish':
-            #do nothing
-            data = ''
-            doneFlag = True
-        else:
-            raise(ValueError("Unrecognized keyword {}.".format(word)))
-        if trace:
-            print('{}\n\t{}'.format(word, data))
-    
-    if not hasParam:
-        raise(ValueError("Missing Required input 'network_parameter_file'."))
-    if not hasField:
-        raise(ValueError("Missing Required input 'network_star_file'"))
-    
-    # Warn of absence of optional data and state assumptions.
-    if omissionWarnings:
-        if not hasCore:
-            warnings.warn(RuntimeWarning("core_monomer not specified. Assuming monomer 0."))
-    
-    calculator = NetworkFieldGen(fieldParam,fieldFile)
-    
-    return calculator, core_monomer
+            raise(ValueError("Unrecognized Keyword {}."))
+        # End of Block
+        word = next(words)
+        if not word == "}":
+            msg = "Expected '}}' to close PscfFieldGen{{ block; got {}."
+            raise(ValueError(msg.format(word)))
+    return param, calculator, outFile
 
 class ParticleGenerator:
     """ Field Generator Implementing the Form-Factor Method
@@ -448,34 +180,39 @@ class ParticleGenerator:
         if not entrykey == "ParticleGenerator{":
             msg = "ParticleGenerator expected key 'ParticleGenerator{{'; got '{}'"
             raise(ValueError(msg.format(entrykey)))
+        TRACER.trace("Reading ParticleGenerator from File.",TraceLevel.EVENT)
         word = next(wordstream)
         if not isCrystalKey(word):
             msg = "Unrecognized keyword '{}' in ParticleGenerator{{...}} block."
             raise(ValueError(msg.format(word)))
-        crystal = readCrystalFromFile(wordstream, entrykey, param)
+        crystal = readCrystalFromFile(wordstream, word, param)
         word = next(wordstream)
         if not word == "}":
             msg = "Expected '}}' to close ParticleGenerator{{ block; got {}."
             raise(ValueError(msg.format(word)))
+        TRACER.trace("Done reading ParticleGenerator.",TraceLevel.EVENT)
         return cls(crystal)
     
-    def to_kgrid(self, frac, ngrid, lattice=None, interfaceWidth=0.0):
+    def to_kgrid(self, param, frac=None, ngrid=None, lattice=None, interfaceWidth=None):
         """
         Return the reciprocal space grid of densities.
         
         Parameters
         ----------
-        frac : numerical, array-like
+        param : pscfFieldGen.filemanagers.ParamFile
+            The parameter file on which to base the generated field.
+        frac : numerical, array-like (optional)
             volume fractions of all monomer types. Sum of all values = 1.
-            Value at index 0 represents the "core" or particle-forming monomer.
-            And must also be monomer 1 by PSCF indications.
-        ngrid : int, array-like
+            If included, values will override those determined from param.
+        ngrid : int, array-like (optional)
             The number of grid points in each (real-space) direction.
-        lattice : pscfFieldGen.structure.Lattice, optional
+            If included, will override value determined from param.
+        lattice : pscfFieldGen.structure.Lattice, (optional)
             The lattice on which to generate the field.
-            If not specified, the most recent lattice will be reused.
-        interfaceWidth : float
+            If included, will override values determined from param.
+        interfaceWidth : float, (optional)
             The interface width to be used in smearing interfaces.
+            If included, will override values determined from param.
         
         Returns
         -------
@@ -483,32 +220,60 @@ class ParticleGenerator:
             Full array of all Fourier amplitudes for each wavevector.
             Shape is (n_vector, n_monomer).
         """
+        _fn_ = "ParticleGenerator.to_kgrid"
+        # Check inputs
+        if frac is None:
+            frac = param.getMonomerFractions()
+        if ngrid is None:
+            ngrid = param.ngrid
+        if lattice is None:
+            lattice = param.getLattice()
+        # Constants
         twopi = 2.0 * np.pi
         imag = 1.0j # store reference to unit complex value
-        
+        # Calculate stable values before loop
         frac = np.array(frac)
+        debug(_fn_,"monomer fractions = {}",frac)
+        debug(_fn_,"generating on {}",lattice)
         nspecies = len(frac) # number of monomers
         ngrid = np.array(ngrid)
+        debug(_fn_,"ngrid = {}",ngrid)
         nbrill =  getKgridCount(ngrid) # number of wavevectors
-        if lattice is not None:
-            self._crystal.lattice = lattice # update lattice
+        self._crystal.lattice = lattice # update lattice
         lat = self._crystal.lattice # store local reference to lattice
         vol = lat.volume # unit cell volume
+        debug(_fn_,"unit cell volume = {}",vol)
         coreindex, refVolume = self._crystal.chooseCore(frac) # determine core
-        
+        debug(_fn_,"core index = {}",coreindex)
+        debug(_fn_,"particle volume = {}",refVolume)
+        if interfaceWidth is None:
+            interfaceWidth = param.getInterfaceWidth(coreindex)
+        # Generate rho field
         rho = np.zeros((nbrill,nspecies),dtype=np.complex128) # pre-allocate
+        # Iterate over wavevectors
         for (t, wave) in enumerate(IterableWavevector(ngrid, lat)):
+            debug(_fn_,"wavevector {}",t)
+            debug(_fn_,"q = {}",wave)
             if t == 0: 
                 # 0-th wave-vector -- corresponds to volume fractions
                 rho[t,:] = frac[:] 
             else:
                 total = rho[t,coreindex] # local reference to zero-initialized amplitude
                 q_norm = twopi * wave.magnitude
+                debug(_fn_,"q_norm = |q| = {}",q_norm)
                 fsmear = np.exp( -( (interfaceWidth**2) * q_norm**2) / 2.0 )
+                debug(_fn_,"f_smear = {}",fsmear)
+                # iterate over particles
                 for particle in self._crystal:
-                    eiqR = np.exp( imag * twopi * wave * particle.position )
-                    ff = particle.formFactorAmplitude( wave, refVol )
+                    debug(_fn_,"particle {}",particle)
+                    qR = wave * particle.position 
+                    debug(_fn_,"q*R = {}",qR)
+                    eiqR = np.exp( imag * twopi * qR )
+                    debug(_fn_,"exp(i*q*R) = {}",eiqR)
+                    ff = particle.formFactorAmplitude( wave, refVolume )
+                    debug(_fn_,"f_j(q) = {}",ff)
                     total += eiqR * ff
+                    debug(_fn_,"running total f_j(q)*exp(i*q*R) = {}",total)
                 rho[t, coreindex] = total * (1/vol) * fsmear
                 rhoTemp = -rho[t, coreindex] / (1 - frac[coreindex])
                 for j in range(nspecies):
@@ -517,9 +282,10 @@ class ParticleGenerator:
                 for (j,r) in enumerate(rho[t,:]):
                     if r == -0.0:
                         rho[t,j] = 0.0
+            debug("ParticleGenerator.to_kgrid","rho[{},:] = {}",t,rho[t,:])
         return rho
 
-class LamellarGenerator(object):
+class LamellarGenerator:
     def __init__(self):
         pass
     
@@ -536,6 +302,7 @@ class LamellarGenerator(object):
         else:
             msg = "Unrecognized key ({}) for LamellarGenerator."
             raise(ValueError(msg.format(entrykey)))
+        TRACER.trace("Read LamellarGenerator from file.",TraceLevel.EVENT)
         return cls()
     
     def to_field(self,monfrac):
@@ -558,7 +325,7 @@ class LamellarGenerator(object):
                 out[1,i] = rhotemp * monfrac[i]
         return out
 
-class NetworkGenerator(object):
+class NetworkGenerator:
     """ A generator for network phase initial guesses. """
     def __init__(self, pfile, crystal):
         """ 
@@ -600,6 +367,7 @@ class NetworkGenerator(object):
         if not entrykey == "NetworkGenerator{":
             msg = "NetworkGenerator expected key 'NetworkGenerator{{'; got {}"
             raise(ValueError(msg.format(entrykey)))
+        TRACER.trace("Reading NetworkGenerator from File.",TraceLevel.EVENT)
         word = next(wordstream)
         if word == 'network_param':
             filename = next(wordstream)
@@ -607,6 +375,7 @@ class NetworkGenerator(object):
         else:
             msg = "Expected keyword 'network_param': got {}."
             raise(ValueError(msg.format(word)))
+        TRACER.trace("Read network param file.",TraceLevel.EVENT)
         word = next(wordstream)
         if word == "NetworkCrystal{":
             crystal = NetworkCrystal.fromFile(wordstream, word, netparam)
@@ -620,6 +389,7 @@ class NetworkGenerator(object):
         if not word == "}":
             msg = "Expected '}}' to close NetworkGenerator{{ block; got {}."
             raise(ValueError(msg.format(word)))
+        TRACER.trace("Finished NetworkGenerator.",TraceLevel.EVENT)
         return cls(netparam, crystal)
     
     def _to_raw_rgrid(self):
@@ -679,4 +449,33 @@ class NetworkGenerator(object):
                     if not j == coreMon:
                         rgrid[i,j] = frac[j]/fnonCore
         return rgrid
-        
+
+_entry_key_map = {  "ParticleGenerator{" :   ParticleGenerator, \
+                    "LamellarGenerator{" :   LamellarGenerator, \
+                    "NetworkGenerator{" :   NetworkGenerator  }
+
+def isGeneratorKey(entryKey):
+    """ Return True if valid entryKey is given. """
+    return entryKey in _entry_key_map
+
+def readGeneratorFromFile(wordstream, entrykey, param):
+    """ Return Crystal object read from file.
+    
+    Type of crystal is chosen based on entrykey.
+    
+    Parameters
+    ----------
+    wordstream : util.stringTools.FileParser
+        The data stream from the input file.
+    entryKey : string
+        The entry key triggering the call.
+    param : ParamFile
+        The parameter file on which the structure
+        is based.
+    """
+    if not isGeneratorKey(entrykey):
+        msg = "No Generator Type associated with key {}."
+        raise(ValueError(msg.format(entrykey)))
+    cls = _entry_key_map.get(entrykey)
+    return cls.fromFile(wordstream,entrykey,param)
+

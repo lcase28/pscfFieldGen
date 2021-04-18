@@ -5,6 +5,7 @@ Definition of Particle and Form-Factor classes
 from pscfFieldGen.structure.core import POSITION_TOLERANCE
 from pscfFieldGen.structure.lattice import Lattice, Vector
 from pscfFieldGen.structure.symmetry import SymmetryOperation
+from pscfFieldGen.util.tracing import TRACER, TraceLevel, debug
 
 from abc import ABC, abstractmethod
 from copy import deepcopy
@@ -32,7 +33,7 @@ class ParticlePosition(Vector):
     
     def copy(self):
         """ A copy of the ParticlePosition instance. """
-        return ParticlePosition(self.components, self.lattice, self._keep_UC_flag)
+        return deepcopy(self)
     
     def __eq__(self, other):
         """ Return true if two particle positions are equal.
@@ -107,9 +108,6 @@ class ParticleBase(ABC):
             When entryKey does not match that expected for the class.
         """
         pass
-        if not self.isEntryKey(self,entryKey):
-            msg = "Entry Key '{}' does not match key for {}."
-            raise(ValueError(msg.format(entryKey, type(self).__name__)))
     
     def replicate_at_position(self, newPosition):
         """
@@ -413,7 +411,7 @@ class ParticleSet(object):
         """ Update the lattice for the full ParticleSet. """
         if not isinstance(newLattice,Lattice):
             raise(TypeError("A ParticleSet's lattice must be an instance of Lattice"))
-        if not self._dim == newLattice.dim: 
+        if not self.dim == newLattice.dim: 
             raise(ValueError("A ParticleSet's new lattice must be same dimension."))
         self._lattice = newLattice.copy()
         for p in self._particles:
@@ -519,10 +517,10 @@ class Sphere(ParticleBase):
             When entryKey does not match that expected for the class.
             When required Keys are missing, or in incorrect order.
         """
-        if not entryKey == "Sphere{":
+        if not entrykey == "Sphere{":
             msg = "Entry Key '{}' does not match key for {}."
             raise(ValueError(msg.format(entryKey, type(self).__name__)))
-        
+        TRACER.trace("Reading Sphere from file.",TraceLevel.EVENT)
         word = next(wordstream) # check for position
         if not word.lower() == "position":
             msg = "Sphere expected keyword 'position'; got {}."
@@ -530,14 +528,16 @@ class Sphere(ParticleBase):
         coords = np.zeros(lattice.dim)
         for i in range(lattice.dim):
             coords[i] = wordstream.next_float()
+        TRACER.trace("Using Position coordinates {}.".format(coords),TraceLevel.RESULT)
         position = ParticlePosition(coords, lattice)
-        
+        TRACER.trace("Using Position {}.".format(position),TraceLevel.RESULT)
         word = next(wordstream) # check for close of Sphere{ } block
         if not word == "}":
             msg = "Sphere expected end of block '}'; got {}."
             raise(ValueError(msg.format(word)))
-         
         out = cls(position)
+        TRACER.trace("Generated {}.".format(out),TraceLevel.RESULT)
+        TRACER.trace("Done Reading Sphere from file.",TraceLevel.EVENT)
         return out
     
     def formFactorAmplitude(self, q, volume):
@@ -575,10 +575,10 @@ class Cylinder2D(ParticleBase):
             When entryKey does not match that expected for the class.
             When required Keys are missing, or in incorrect order.
         """
-        if not entryKey == "Cylinder2D{":
+        if not entrykey == "Cylinder2D{":
             msg = "Entry Key '{}' does not match key for {}."
             raise(ValueError(msg.format(entryKey, type(self).__name__)))
-        
+        TRACER.trace("Reading Cylinder2D from file.",TraceLevel.EVENT)
         word = next(wordstream) # check for position
         if not word.lower() == "position":
             msg = "Cylinder2D expected keyword 'position'; got {}."
@@ -586,17 +586,19 @@ class Cylinder2D(ParticleBase):
         coords = np.zeros(lattice.dim)
         for i in range(lattice.dim):
             coords[i] = wordstream.next_float()
+        TRACER.trace("Using Position coordinates {}.".format(coords),TraceLevel.RESULT)
         position = ParticlePosition(coords, lattice)
-        
+        TRACER.trace("Using Position {}.".format(position),TraceLevel.RESULT)
         word = next(wordstream) # check for close of Sphere{ } block
         if not word == "}":
             msg = "Cylinder2D expected end of block '}'; got {}."
             raise(ValueError(msg.format(word)))
-         
         out = cls(position)
+        TRACER.trace("Generated {}.".format(out),TraceLevel.RESULT)
+        TRACER.trace("Done Reading Cylinder2D from file.",TraceLevel.EVENT)
         return out
     
-    def formFactorAmplitude(self, q, volume):
+    def formFactorAmplitude(self, q, area):
         """ 
         Returns the form factor amplitude for a 2D circular particle.
         

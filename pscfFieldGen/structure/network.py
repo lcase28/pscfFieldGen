@@ -3,7 +3,7 @@ import numpy as np
 
 import pscfFieldGen.filemanagers.pscf as pscf
 import pscfFieldGen.util.contexttools as contexttools
-
+from pscfFieldGen.util.tracing import TRACER, TraceLevel
 
 class NetworkCrystal:
     """
@@ -49,6 +49,7 @@ class NetworkCrystal:
         """
         if not entrykey == "NetworkCrystal{":
             raise(ValueError("Expected Key 'NetworkCrystal{{'; got '{}'".format(entrykey)))
+        TRACER.trace("Reading NetworkCrystal from file.",TraceLevel.EVENT)
         nmon = param.N_monomer
         
         core_options = [i for i in range(nmon)] # default
@@ -77,6 +78,7 @@ class NetworkCrystal:
             filetype = "Symmetry-Adapted Basis Field File"
             msg = "{} template must be provided for NetworkCrystal with keyword 'star_file'."
             raise(RuntimeError(msg.format(filetype)))
+        TRACER.trace("Using Network Core Option: {}.".format(core_options),TraceLevel.RESULT)
         return cls(fname, core_options)
     
     @property

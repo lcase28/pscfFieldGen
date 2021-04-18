@@ -686,7 +686,7 @@ class SymmetryGroup(object):
         if not isinstance(target,list):
             msg = "Target must be a list, not {}."
             raise(TypeError(msg.format(type(target).__name__)))
-        for op in self._ops
+        for op in self._ops:
             res = other @ op
             if not res in target:
                 target.append(res)

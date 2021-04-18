@@ -7,7 +7,7 @@ from pscfFieldGen.structure.particles import (
     ParticleSet, 
     isParticleKey, 
     readParticleFromFile )
-
+from pscfFieldGen.util.tracing import TRACER, TraceLevel
 from copy import deepcopy
 import numpy as np
 
@@ -66,7 +66,9 @@ class BasisCrystal(object):
         """
         if not entrykey == "BasisCrystal{":
             raise(ValueError("Expected Key 'BasisCrystal{{'; got '{}'".format(entrykey)))
+        TRACER.trace("Generating BasisCrystal.",TraceLevel.EVENT)
         lattice = param.getLattice()
+        TRACER.trace("\tUsing lattice {}".format(lattice),TraceLevel.ALL)
         nmon = param.nMonomer
         
         core_options = [i for i in range(param.nMonomer)] # default
@@ -84,14 +86,18 @@ class BasisCrystal(object):
                     core_option_set = True
                 core_options.append(val)
             elif isParticleKey(word):
-                val = readParticleFromFile(wordstream, entrykey, lattice)
+                val = readParticleFromFile(wordstream, word, lattice)
                 particles.append(val)
             elif word == "}":
                 end_block = True
             else:
                 msg = "Unrecognized Key '{}' in MotifCrystal{{...}} block."
                 raise(ValueError(msg.format(word)))
-        return cls(particles, lattice, core_options)
+        TRACER.trace("Using Crystal Core Options: {}.".format(core_options),TraceLevel.RESULT)
+        out = cls(particles, lattice, core_options)
+        TRACER.trace("Built Crystal From Basis:\n{}".format(out.longString),TraceLevel.RESULT)
+        TRACER.trace("Done Reading BasisCrystal.",TraceLevel.EVENT)
+        return out
     
     def particlePositions(self):
         """ Iterator over particle positions """
@@ -269,10 +275,15 @@ class MotifCrystal(BasisCrystal):
         """
         if not entrykey == "MotifCrystal{":
             raise(ValueError("Expected Key 'MotifCrystal{{'; got '{}'".format(entrykey)))
+        TRACER.trace("Generating MotifCrystal.",TraceLevel.EVENT)
         lattice = param.getLattice()
-        group = param.group_name
+        TRACER.trace("\tUsing Lattice: {}.".format(lattice),TraceLevel.ALL)
         crystalsys = param.crystal_system
+        TRACER.trace("\tUsing Crystal System: {}.".format(crystalsys),TraceLevel.ALL)
+        group = param.group_name
+        TRACER.trace("\tUsing Group Name: {}.".format(lattice),TraceLevel.ALL)
         spaceGroup = SpaceGroup(lattice.dim,group,crystalsys)
+        TRACER.trace("\tUsing SpaceGroup: {}.".format(lattice),TraceLevel.RESULT)
         nmon = param.nMonomer
         
         core_options = [i for i in range(param.nMonomer)] # default
@@ -290,14 +301,18 @@ class MotifCrystal(BasisCrystal):
                     core_option_set = True
                 core_options.append(val)
             elif isParticleKey(word):
-                val = readParticleFromFile(wordstream, entrykey, lattice)
+                val = readParticleFromFile(wordstream, word, lattice)
                 particles.append(val)
             elif word == "}":
                 end_block = True
             else:
                 msg = "Unrecognized Key '{}' in MotifCrystal{{...}} block."
                 raise(ValueError(msg.format(word)))
-        return cls(spaceGroup, particles, lattice, core_options)
+        TRACER.trace("Using Crystal Core Options: {}.".format(core_options),TraceLevel.RESULT)
+        out = cls(spaceGroup, particles, lattice, core_options)
+        TRACER.trace("Built Crystal From Motif:\n\t{}.".format(out.longstring),TraceLevel.RESULT)
+        TRACER.trace("Done building MotifCrystal.",TraceLevel.EVENT)
+        return out
     
     @BasisCrystal.lattice.setter
     def lattice(self, newLattice):
