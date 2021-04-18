@@ -1,16 +1,27 @@
-software            pscf
-parameter_file      param_kgrid
-output_file         rho_kgrid.in
-structure_type  particle
-
-coord_input_style   basis
-N_particles         8
-particle_positions   
-    0   0   0   
-    0.5 0.5 0.5 
-    0.25 0.0 0.5 
-    0.75 0.0 0.5 
-    0.5 0.25 0.0 
-    0.5 0.75 0.0 
-    0.0 0.5 0.25 
-    0.0 0.5 0.75
+PscfFieldGen{
+    
+    software    pscf
+    parameter_file  param_kgrid
+    output_file     rho_kgrid.in
+    
+    ParticleGenerator{
+        
+        BasisCrystal{
+            
+            core_option 0
+            core_option 1
+            
+            Sphere{ position    0.00    0.00    0.00 }
+            Sphere{ position    0.50    0.50    0.50 }
+            Sphere{ position    0.25    0.00    0.50 }
+            Sphere{ position    0.75    0.00    0.50 }
+            Sphere{ position    0.50    0.25    0.00 }
+            Sphere{ position    0.50    0.75    0.00 }
+            Sphere{ position    0.00    0.50    0.25 }
+            Sphere{ position    0.00    0.50    0.75 }
+            
+        }
+        
+    }
+    
+}

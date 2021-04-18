@@ -149,7 +149,7 @@ class ParticleBase(ABC):
     @property
     def position(self):
         """ Position of the Particle as a ParticlePosition object. """
-        return self._position.copy()
+        return self._position
     
     @position.setter
     def position(self, newPosition):
@@ -399,12 +399,12 @@ class ParticleSet(object):
     
     @property
     def particles(self):
-        return deepcopy(self._particles)
+        return self._particles
     
     @property
     def lattice(self):
         """ The lattice on which the ParticleSet members are defined. """
-        return self._lattice.copy()
+        return self._lattice
     
     @lattice.setter
     def lattice(self, newLattice):

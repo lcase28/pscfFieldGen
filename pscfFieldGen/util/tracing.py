@@ -38,6 +38,12 @@ class TraceManager:
     def filterLevel(self, val):
         self._filter = val
     
+    def passesFilter(self, filter_level):
+        """
+        Return True if a message at filter_level would be printed.
+        """
+        return filter_level <= self._filter
+    
     def trace(self, message, level, *args):
         if level <= self._filter:
             if len(args) > 0:
@@ -48,5 +54,6 @@ class TraceManager:
 TRACER = TraceManager(TraceLevel.NONE)
 
 def debug(caller_name, msg, *args):
-    msg = caller_name + ": " + msg
-    TRACER.trace(msg, TraceLevel.DEBUG, *args)
+    if TRACER.passesFilter(TraceLevel.DEBUG):
+        msg = caller_name + ": " + msg
+        TRACER.trace(msg, TraceLevel.DEBUG, *args)

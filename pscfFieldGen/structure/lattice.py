@@ -3,6 +3,7 @@ from pscfFieldGen.util.tracing import debug
 from copy import deepcopy
 import numpy as np
 import math
+import weakref
 
 ## Debug Functions
 
@@ -36,7 +37,7 @@ def asind(x):
     """Return (in degrees) the arcsine of x. """
     return math.degrees(math.asin(x))
 
-class Lattice(object):
+class CoreLattice(object):
     """ 
     Object representing a crystallographic basis vector lattice.
     """
@@ -452,6 +453,49 @@ class Lattice(object):
         """ returns an ndarray. Each row is a lattice vector. """
         return np.array(self.latticeVectors, *args, *kwargs)
 
+class SharedLattice(CoreLattice):
+    """ 
+    Sub-class of lattice intended to force sharing of underlying lattice data
+    """
+    def __init__(self, dim, basis, reciprocal=None):
+        super().__init__(dim,basis)
+        if reciprocal is None:
+            self._recip = SharedLattice(dim, self._reciprocal_basis, self)
+            self._origin = True
+        else:
+            self._recip = weakref.ref(reciprocal)
+            self._origin = False
+            
+    def copy(self):
+        return self
+    
+    def reciprocalLattice(self):
+        if self._origin:
+            return self._recip
+        else:
+            r = self._recip()
+            if r is not None:
+                return r
+            else:
+                self._origin = True
+                self._recip = SharedLattice(dim, self._reciprocal_basis, self)
+                return self._recip
+    
+    def isReciprocal(self,other):
+        if self._origin:
+            if self._recip is other:
+                return True
+            else:
+                return super().isReciprocal(other)
+        else:
+            r = self._recip()
+            if r is other:
+                return True
+            else:
+                return super().isReciprocal(other)
+
+Lattice = SharedLattice # Make Shared Lattice the favored lattice implementation
+
 def cartesianLattice(dim):
     if dim not in (2,3):
         raise(ValueError("Lattice must be 2D or 3D."))
@@ -522,7 +566,7 @@ class Vector(object):
     
     @property
     def lattice(self):
-        return self._lattice.copy()
+        return self._lattice
     
     @lattice.setter
     def lattice(self, newLattice):
@@ -637,7 +681,11 @@ class Vector(object):
         if not (isinstance(a,Vector) and isinstance(b,Vector)):
             msg = "Vector.dot(a,b) not defined for arguments {} and {}"
             raise(TypeError(msg.format(type(a).__name__,type(b).__name__)))
-        if a._lattice == b._lattice:
+        if a._lattice.isReciprocal(b._lattice):
+            atmp = a._components
+            btmp = b._components
+            return atmp @ btmp
+        elif a._lattice is b._lattice:
             atmp = a._cartesian_components
             btmp = b._cartesian_components
             return atmp @ btmp
@@ -646,10 +694,6 @@ class Vector(object):
             atmp = a._components
             btmp = b._components
             return atmp @ mt @ btmp
-        elif a._lattice.isReciprocal(b._lattice):
-            atmp = a._components
-            btmp = b._components
-            return atmp @ btmp
         else:
             msg = "Incompatible lattice; unable to dot {} and {}"
             raise(ValueError(msg.format(a,b)))
@@ -705,7 +749,7 @@ class Vector(object):
         # by the vector cartesian components right-multiplied by the 
         # inverse of lattice.basis.
         ctmp = atmp @ tmatr
-        c = Vector(ctmp,lattice.copy())
+        c = Vector(ctmp,lattice)
         return c
     
     def _instance_castToLattice(self,lattice):
@@ -761,7 +805,7 @@ class Vector(object):
             except:
                 return NotImplemented
             ctmp = other * self._components
-            ltmp = self._lattice.copy()
+            ltmp = self._lattice
             return Vector(ctmp, ltmp)
     
     def __rmul__(self,other):
