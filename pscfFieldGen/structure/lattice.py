@@ -457,14 +457,16 @@ class SharedLattice(CoreLattice):
     """ 
     Sub-class of lattice intended to force sharing of underlying lattice data
     """
-    def __init__(self, dim, basis, reciprocal=None):
+    def __init__(self, dim, basis, _reciprocal=None):
+        self._startup_flag = True
         super().__init__(dim,basis)
-        if reciprocal is None:
+        if _reciprocal is None:
             self._recip = SharedLattice(dim, self._reciprocal_basis, self)
             self._origin = True
         else:
-            self._recip = weakref.ref(reciprocal)
+            self._recip = weakref.ref(_reciprocal)
             self._origin = False
+        self._startup_flag = False
             
     def copy(self):
         return self
@@ -505,9 +507,10 @@ class SharedLattice(CoreLattice):
         this method) should not use this argument, and allow the default.
         """
         super()._update_basis(newBasis)
-        if not _secondCall: # avoid infinite recursion
-            recip = self.reciprocalLattice() # get strong reference if weakly referenced
-            recip._update_basis(self._reciprocal_basis, _secondCall=True)
+        if not self._startup_flag: # Do not cascade during instantiation
+            if not _secondCall: # avoid infinite recursion
+                recip = self.reciprocalLattice() # get strong reference if weakly referenced
+                recip._update_basis(self._reciprocal_basis, _secondCall=True)
 
 Lattice = SharedLattice # Make Shared Lattice the favored lattice implementation
 
