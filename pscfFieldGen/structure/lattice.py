@@ -477,6 +477,7 @@ class SharedLattice(CoreLattice):
             if r is not None:
                 return r
             else:
+                # original origin was garbage collected. Make this new origin.
                 self._origin = True
                 self._recip = SharedLattice(dim, self._reciprocal_basis, self)
                 return self._recip
@@ -493,6 +494,20 @@ class SharedLattice(CoreLattice):
                 return True
             else:
                 return super().isReciprocal(other)
+    
+    def _update_basis(self, newBasis, _secondCall=False):
+        """ 
+        Internal method to update basis and pre-computed values.
+        
+        Argument '_secondCall' is a private argument meant for
+        use in tracking recursive calls for updating the referenced
+        reciprocal lattices. Non-recursive calls (calls from outside
+        this method) should not use this argument, and allow the default.
+        """
+        super()._update_basis(newBasis)
+        if not _secondCall: # avoid infinite recursion
+            recip = self.reciprocalLattice() # get strong reference if weakly referenced
+            recip._update_basis(self._reciprocal_basis, _secondCall=True)
 
 Lattice = SharedLattice # Make Shared Lattice the favored lattice implementation
 
