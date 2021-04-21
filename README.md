@@ -205,11 +205,11 @@ flag that directly indicates the level without explicitly using the `--mode` fla
 
 Mode Argument | Shortcut | Description
 ------------- | -------- | -----------
-silent  | `--silent | -s`  | No output. Silent operation.
-echo    | `--echo | -e`    | (Default) Echo contents of file as read.
-trace   | `--trace | -t`   | Output announce major calculation steps and token interpretation.
-verbose | `--verbose | -v` | Output results of major calculations.
-debug   | `--debug | -d`   | Output granular, intermediate calculation results. (developer use).
+silent  | --silent or -s  | No output. Silent operation.
+echo    | --echo or -e    | (Default) Echo contents of file as read.
+trace   | --trace or -t   | Output announce major calculation steps and token interpretation.
+verbose | --verbose or -v | Output results of major calculations.
+debug   | --debug or -d   | Output granular, intermediate calculation results. (developer use).
 
 For typical users, the _verbose_ mode should be the highest level of output that 
 should be needed. At this level, the program will print out data about major
