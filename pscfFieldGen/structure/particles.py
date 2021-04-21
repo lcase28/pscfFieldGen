@@ -10,6 +10,7 @@ from pscfFieldGen.util.tracing import TRACER, TraceLevel, debug
 from abc import ABC, abstractmethod
 from copy import deepcopy
 import numpy as np
+import numba
 from scipy.special import j1
 
 class ParticlePosition(Vector):
@@ -277,7 +278,7 @@ class ParticleBase(ABC):
     def __eq__(self, other):
         return self.typeMatch(other) and self.positionMatch(other)
     
-    def __matmul__(self,other):
+    def __rmatmul__(self,other):
         if isinstance(other, SymmetryOperation):
             return self.applySymmetry(other)
         else:
@@ -488,7 +489,14 @@ class ParticleSet(object):
         for p in self._particles:
             buildStr += "\n{}".format(p)
         return buildStr
-        
+
+@numba.jit("double(double,double)", nopython=True, cache=True)
+def _raw_sphere_ff(qNorm,volume):
+    R = ( ( 3 * volume ) / (4 * np.pi) ) ** (1./3)
+    qR = qNorm * R
+    ff = volume * 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
+    return ff
+    
 class Sphere(ParticleBase):
     """ Particle with associated Form Factor. """
     
@@ -542,10 +550,12 @@ class Sphere(ParticleBase):
     
     def formFactorAmplitude(self, q, volume):
         qNorm = q.magnitude
-        R = ( ( 3 * volume ) / (4 * np.pi) ) ** (1./3)
-        qR = qNorm * R
-        ff = volume * 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
-        return ff
+        # to improve performance on large 3D structures, use numba-compiled sub-method
+        return _raw_sphere_ff(qNorm, volume)
+        #R = ( ( 3 * volume ) / (4 * np.pi) ) ** (1./3)
+        #qR = qNorm * R
+        #ff = volume * 3 * (np.sin(qR) - qR * np.cos(qR)) / qR**3
+        #return ff
         
 class Cylinder2D(ParticleBase):
     """ Cylinder with axis perpendicular to 2D plane (Circular Disk). """

@@ -1,13 +1,17 @@
-software        pscfpp
-parameter_file  param
-output_file     in/rho_kgrid
-structure_type  particle
+PscfFieldGen{
 
-core_monomer    0
-
-coord_input_style   basis
-N_particles         1
-particle_positions   
-    0       0
-finish
-
+    software        pscfpp
+    parameter_file  param
+    output_file     in/rho_kgrid
+    
+    ParticleGenerator{
+        
+        BasisCrystal{
+            
+            core_option 0
+            core_option 1
+            
+            Sphere{ position    0       0   }
+        }
+    }
+}

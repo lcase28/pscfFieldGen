@@ -51,10 +51,9 @@ is used to list the options to choose between.
 
 The first line of the script uses the traced invocation of pscfFieldGen
 to generate a KGRID field file ('in/rho_kgrid'). The traced invocation 
-(flag `-t`) causes the program to echo the input read from *model*.
-After echoing this data, the program subsequently prints the details of
-the Lattice it will use, the crystal structure it will use, and output
-notice of key steps in its calculation. The addition of ` > logs/generation`
+(flag `-t`) causes the program to echo the input read from *model*,
+and output notice of key steps in its calculation.
+The addition of ` > logs/generation`
 at the end of the command redirects this output to a file 'generation'
 in the sub-directory 'logs' within the example's root directory.
 

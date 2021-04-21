@@ -1,6 +1,7 @@
 """ Module defining class to hold symmetry operation data """
 
 from pscfFieldGen.structure.core import POSITION_TOLERANCE
+from pscfFieldGen.structure.lattice import Lattice, Vector
 from pscfFieldGen.util.stringTools import str_to_num, wordsGenerator
 
 from copy import deepcopy

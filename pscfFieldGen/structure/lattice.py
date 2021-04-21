@@ -702,7 +702,7 @@ class Vector(object):
         if a._lattice.isReciprocal(b._lattice):
             atmp = a._components
             btmp = b._components
-            return atmp @ btmp
+            return np.dot(atmp,btmp) #atmp @ btmp
         elif a._lattice is b._lattice:
             atmp = a._cartesian_components
             btmp = b._cartesian_components

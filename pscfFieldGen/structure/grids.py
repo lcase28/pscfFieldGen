@@ -158,24 +158,24 @@ def kgridIterator(ngrid, fromKgrid=False):
     else:
         ngrid = np.array(ngrid)
         kgrid = getKgrid(ngrid)
-    debug(_fn_,"ngrid = {}".format(ngrid))
-    debug(_fn_,"kgrid = {}".format(kgrid))
+    debug(_fn_,"ngrid = {}",ngrid)
+    debug(_fn_,"kgrid = {}",kgrid)
     dim = len(ngrid)
-    debug(_fn_,"dim = {}".format(dim))
+    debug(_fn_,"dim = {}",dim)
     if dim == 1:
         for i in range(kgrid[0]):
-            debug(_fn_,"i={}".format(i))
+            debug(_fn_,"i={}",i)
             yield i
     elif dim == 2:
         for i in range(kgrid[0]):
             for j in range(kgrid[1]):
-                debug(_fn_,"i={}, j={}".format(i,j))
+                debug(_fn_,"i={}, j={}",i,j)
                 yield miller_to_brillouin( np.array([i,j]), ngrid )
     elif dim == 3:
         for i in range(kgrid[0]):
             for j in range(kgrid[1]):
                 for k in range(kgrid[2]):
-                    debug(_fn_,"i={}, j={}, k={}".format(i,j,k))
+                    debug(_fn_,"i={}, j={}, k={}",i,j,k)
                     yield miller_to_brillouin( np.array([i,j,k]), ngrid )
     else:
         raise(ValueError("positionIterator only valid for ngrid of 1-,2-,and 3-dimensional grids"))
@@ -188,9 +188,9 @@ def miller_to_brillouin(G, ngrid, fromKgrid=False):
     ngrid = np.array(ngrid)
     if fromKgrid:
         ngrid = getNgrid(ngrid)
-    debug(_fn_, "ngrid = {}".format(ngrid))
+    debug(_fn_, "ngrid = {}",ngrid)
     G = np.array(G)
-    debug(_fn_, "miller = {}".format(G))
+    debug(_fn_, "miller = {}",G)
     out= np.zeros_like(G)
     dim = len(G)
     dshift = dim - 1
@@ -201,7 +201,7 @@ def miller_to_brillouin(G, ngrid, fromKgrid=False):
                 out[i] = G[i] - ngrid[i]
             else:
                 out[i] = G[i]
-    debug(_fn_, "brillouin = {}".format(out))
+    debug(_fn_, "brillouin = {}",out)
     return out
 
 class IterableWavevector(Vector):

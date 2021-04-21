@@ -1,11 +1,20 @@
-software        pscf
-parameter_file  param_kgrid
-output_file     rho_kgrid.in
-structure_type  particle
+PscfFieldGen{
+    
+    software        pscf
+    parameter_file  param_kgrid
+    output_file     rho_kgrid.in
+    
+    ParticleGenerator{
+        
+        MotifCrystal{
+            
+            core_option 0
+            core_option 1
+            
+            Sphere{ position    0.0     0.0     0.0 }
+            
+        }
+    
+    }
 
-core_monomer        0
-
-coord_input_style   motif
-N_particles         1
-particle_positions   
-    0       0       0   
+}

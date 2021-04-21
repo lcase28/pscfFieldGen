@@ -1,11 +1,13 @@
 # Examples: Selection of Core Monomer
 
-The examples in this collection illustrate how to select a monomer
-other than the default 'monomer 0'. 
+The examples in this collection illustrate how to restrict the
+monomer options to sets other than the default *all monomers*
 The examples in this collection reverse the block fractions of the 
 two monomers from that in corresponding examples from `basis_input`.
-In each case, the second monomer rather than the first is set as the
-minority component and the guess is generated accordingly.
+Additionally, unlike the examples from `basis_input` which all (explicitly) list
+both monomers as options (which would have been inferred had *core_option*
+inputs been excluded) these examples instead specify only one monomer
+(monomer 1) as an option.
 All examples in this collection use PSCF (Fortran) for
 field format conversions and SCFT calculations after running pscfFieldGen.
 
@@ -48,10 +50,9 @@ pscf < param_kgrid > conversionLog
 
 The first line of the script uses the traced invocation of pscfFieldGen
 to generate a KGRID field file ('rho_kgrid.in'). The traced invocation 
-(flag `-t`) causes the program to echo the input read from *model*.
-After echoing this data, the program subsequently prints the details of
-the Lattice it will use, the crystal structure it will use, and output
-notice of key steps in its calculation. The addition of ` > generationLog`
+(flag `-t`) causes the program to echo the input read from *model*
+and output notification of major steps during problem setup.
+The addition of ` > generationLog`
 at the end of the command redirects this output to a file 'generationLog'.
 
 The second line executes PSCF using the parameter file 'param_kgrid'.

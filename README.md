@@ -1,7 +1,7 @@
-# PSCF Particle Phase Field Generator
+# PSCF Field Generator
 
-A tool to generate PSCF initial guess files for bulk morphologies involving assemblies of
-3D spherical or 2D cylindrical particles.
+A tool to generate PSCF initial guess files for bulk morphologies involving particle,
+network or lamellar structures.
 
 **NOTE:** This is a beta release. See Notes section at the bottom of this file for special
 assumptions made in its operation.
@@ -16,13 +16,16 @@ assumptions made in its operation.
         * [Anaconda Python](#anaconda-python)
  * [Running pscfFieldGen](#running-pscffieldgen)
     * [Model File](#model-file)
+        * [Particle Structures](#particlegenerator)
+        * [Network Structures](#networkgenerator)
+        * [Lamellar Structures](#lamellargenerator)
     * [Parameter File](#parameter-file)
  * [Special Notes](#special-notes)
         
 
 ## Requirements
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 **Use of this tool requires Python 3.5 or later** as it makes use of some of the newer additions
 to the standard library.
@@ -49,7 +52,6 @@ In addition, the following libraries are also required:
 
  * numpy
  * scipy
- * sympy
 
 All three of these libraries are included standard with Anaconda Python. For installation
 instructions for other Python distributions, see the project sites for these packages.
@@ -60,11 +62,11 @@ such as `import abc`.
 
 ## Installation
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 ### Obtaining Source Code
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 The source code for the tool is hosted on Github. The easiest way to obtain the code is
 with a git version control client. If such a client is installed on your computer,
@@ -82,14 +84,14 @@ analogous folder.
 
 ### Modifying Search Paths
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 To allow the operating system and python interpreter to find the pscfFieldGen program, 
 you will have to make some modifications to environment variables.
 
 #### Adding to PYTHONPATH
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 Many python installations make use of the environment variable PYTHONPATH when searching
 for modules. To add pscfFieldGen to this search path, use the following command
@@ -104,7 +106,7 @@ or to ~/.profile (on Mac OS).
 
 #### Anaconda Python
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 With Anaconda Python and other conda-managed environments, changes to the PYTHONPATH
 environment variable often are not reflected in the python interpreter's effective
@@ -160,11 +162,11 @@ is one possibility.
 
 ## Running pscfFieldGen
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 Running the software requires 2 files:
 
- * A Model file specifying filenames and particle positions.
+ * A Model file specifying reference files and structures
  * A PSCF parameter file.
 
 In order to simplify input for the user, crystallographic and composition information
@@ -183,11 +185,49 @@ In the above command, the -m flag tells the python interpreter to look for the m
 `__main__.py` script. The -f flag tells the program that the model file is about to be
 specified, and 'model_file' represents the name of your model file.
 
-pscfFieldGen can also be called with a -t or --trace flag to print a detailed trace of 
-the software execution to the terminal. 
-This would echo the data read from the model file, as well as
-the Lattice, and crystal structure details.
-In order to redirect this trace to a file, the command can be executed as:
+By default, the program will echo the contents of the model file as it is read to the 
+terminal.
+(_Note:_ The echo will not follow the formatting of the model file. Instead, each token
+or word read from the file will be output within an event statement of the form
+`ECHO   : Token '0' read from file.`)
+The level of output from the program can be modified using the `--mode` flag.
+This flag is used with one of 5 possible output modes in the following form.
+
+```
+$ python -m pscfFieldGen -f model_file [ [--mode | -m] [silent | echo | trace | verbose | debug] ]
+```
+
+Above, the mode setting (indicated as optional by the brackets following `model_file`),
+requires both the flag (either `--mode` or the abbreviated `-m` as indicated in the first
+nested bracket) and an argument (one of the five options listed in the second nested brackets).
+Each of these settings, summarized in the table below, can also be accessed with a shortcut
+flag that directly indicates the level without explicitly using the `--mode` flag.
+
+Mode Argument | Shortcut | Description
+------------- | -------- | -----------
+silent  | `--silent | -s`  | No output. Silent operation.
+echo    | `--echo | -e`    | (Default) Echo contents of file as read.
+trace   | `--trace | -t`   | Output announce major calculation steps and token interpretation.
+verbose | `--verbose | -v` | Output results of major calculations.
+debug   | `--debug | -d`   | Output granular, intermediate calculation results. (developer use).
+
+For typical users, the _verbose_ mode should be the highest level of output that 
+should be needed. At this level, the program will print out data about major
+calculation components that the user can then verify. This information can include
+the list of core monomers that end up being used, the position and type of each particle
+in a particle structure, the lattice on which the calculation will be performed, etc.
+This level of output should be sufficient for users to be confident that their inputs 
+are being interpreted by the program the way they expect.
+Thus, if you wish to run the program without output to the terminal, any of the
+following commands would work:
+
+```
+$ python -m pscfFieldGen -f model_file --mode silent
+$ python -m pscfFieldGen -f model_file -m silent
+$ python -m pscfFieldGen -f model_file --silent
+$ python -m pscfFieldGen -f model_file -s
+```
+In order to redirect program output to a file, one would execute
 
 ```
 $ python -m pscfFieldGen -f model_file -t > trace_file
@@ -200,75 +240,208 @@ the root of the project repository.
 
 ### Model File
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
-The Model file acts as the primary input for the program. Data in this file is specified
-by *case-sensitive* keywords. 
+The Model file acts as the primary input for the program.
+Its format is similar to that of the C++/CUDA version of PSCF, with bracketed
+blocks used to organize data. Each block can contain either data,
+which is specified by keywords followed by the data itself,
+or nested blocks. Both data keywords and block labels are *case-sensititve*.
+Block labels use _CamelCase_ capitalization and their last 
+character is a curly bracket (`{`);
+data keywords are all lower-case, with words separated by underscore (`_`) characters;
+the end of a block is indicated by an isolated closing bracket (`}`).
 Formatting is flexible, requiring only that individual entries be separated
 by some amount of whitespace (spaces, tabs, newlines).
 
 Below is an example of what the contents of a model file might look like for a BCC phase.
 
 ```
-software            pscf
-parameter_file      param_kgrid
-output_file         rho_kgrid
+PscfFieldGen{
 
-core_monomer        0
-
-coord_input_style   basis
-N_particles         2
-particle_positions
-        0.0     0.0     0.0
-        0.5     0.5     0.5
-
-finish
+    software        pscf
+    parameter_file  param_kgrid
+    output_file     rho_kgrid.in
+    
+    ParticleGenerator{
+        
+        BasisCrystal{
+        
+            core_option     0
+            core_option     1
+            
+            Sphere{ position    0.0     0.0     0.0 }
+            Sphere{ position    0.5     0.5     0.5 }
+        }
+    }
+}
 ```
 
-Four fields are required:
+Regardless of the structure being generated, the main block for the program is the 
+`PscfFieldGen{ . . . }` block. Within this block, the first three entries (in order)
+must be:
 
  * `software` : This keyword would be followed by a flag indicating the PSCF version
 this execution is targeting. Currently flag *pscf* (for the Fortran version) and 
-*pscfpp* (for the C++/Cuda versions) are the only acceptable entries. This should be
-the first entry in the model file, and is required before specifying `parameter_file`.
+*pscfpp* (for the C++/Cuda versions) are the only acceptable entries.
  * `parameter_file` : This keyword would be followed by a single file name referencing
 the parameter file. The 'file name' in this case can be any path that would allow the
 file to be found from the current directory.
- * `N_particles` : This keyword is followed by an integer giving the number of particles
-whose positions will be specified in this input file.
- * `particle_positions` : This keyword would be followed by a list of fractional coordinates
-for each particle. For a 2-Dimensional system, this means 2(`N_particles`) coordinates are
-expected. For a 3-Dimensional system, 3(`N_particles`) coordinates are expected.
-Both `parameter_file` and `N_particles` must be specified before `particle_positions`.
-
-Three additional fields are recommended, but not required. If omitted, default values will
-be assumed, and a warning message will be printed informing the user that a default will be used.
-Each of these fields can be specified anywhere in the file, but a convention
-for each is given in its description.
-
  * `output_file` : This keyword is followed by a single file name to which the generated field
 should be written. As with `parameter_file`, this can be any path recognizable from the current
-directory. When specified, it is recommended that you place this field immediately following the 
-`parameter_file` specification. If not specified, the program defaults to a file 'rho_kgrid'.
- * `coord_input_style` : This keyword is followed by one of two flags, _motif_ or _basis_.
-If _motif_ is specified, the given particle positions will be used along with space group symmetry
-to generate a full list of particles in the unit cell. If _basis_ is used, the given particle
-positions are assumed to be the full set of particles in the unit cell. When specified, it is
-advised to specify it immediately before `N_particles`. If omitted, the default is _motif_.
- * `core_monomer` : This keyword specifies, by monomer id, which monomer should be taken to form
-the core of the particles in the assembly. Monomers are indexed starting at 0 and counting up.
-(This numbering differs from the Fortran numbering, which starts at 1). The default value is 0.
-If specified, it is typically included after the file names, and before structure information.
+directory.
 
-Finally, the keyword `finish` is followed by no data and identifies the end of the model file.
-Use of the `finish` keyword is entirely optional, and is included as an aesthetic option for
-users who prefer to have explicit file termination markers.
+Following these entries, the next entry should be a block specifying the structure being
+generated. Three options are possible:
+`ParticleGenerator{ . . . }` for particle-type (sphere or cylinder phases),
+`NetworkGenerator{ . . .}` for network phases using the level-set method,
+or `LamellarGenerator{}` for a lamellar phase. Each of these blocks are detailed below.
 
-Presence of any unrecognized keywords will raise an error and terminate the program.
+#### ParticleGenerator
+
+[Back to Top](#pscf-field-generator)
+
+Using the _ParticleGenerator_ block indicates that you intend to produce a field for
+a particle phase using the form-factor method. Presently, this block contains only one entry,
+which is a nested block specifying the crystal structure. This nested block can be either a
+_BasisCrystal_ block or a _MotifCrystal_ block. The _BasisCrystal_ block expects that the user
+will specify all particles found within the unit cell, and will simply collect these for use
+in the field calculation. The _MotifCrystal_ block, on the other hand, will apply the symmetry
+operators of the unit cell space group (read from the parameter file) to particles
+read from the file in order to generate the full set of particles in the unit cell.
+This feature makes generating complex structures (such as large Frank-Kasper phases) 
+much easier, as the user only need specify the Wyckoff positions, rather than the full
+particle list.
+
+Internally, the _BasisCrystal_ and _MotifCrystal_ blocks are structured the same way.
+Presently, only one data keyword is used in these blocks:
+
+ * `core_option` : This keyword specifies, by monomer id, one monomer to be considered
+an option when choosing the core monomer during generation. This keyword can be excluded
+entirely (in which case all monomers will be considered options) or repeated any number
+of times, until all monomer options are specified. Each use of the keyword will only accept
+one monomer id. As shown in the example above, to specify multiple options, the keyword
+must be repeated for each option.
+Monomers are indexed starting at 0 and counting up.
+(This numbering differs from the Fortran numbering, which starts at 1).
+
+During field generation, the monomer with the lowest overall volume fraction among the
+available core options is chosen to be placed in the particle cores.
+The crystal blocks also accept any number of particles. Each particle is specified within
+its own sub-block. Presently, only two particle types are accepted: 
+
+ * Spheres : For three dimensional structures, spheres are defined in
+`Sphere{ . . . }` blocks. Presently, the only data in this block is the
+keyword `position` followed by 3 numeric values indicating the fractional
+coordinates of the sphere center in the unit cell. For example:
+`Sphere{  position  0.0  0.0  0.0  }`.
+ * Cylinders : For two dimensional structures, cylinders are defined in
+`Cylinder2D{ . . . }` blocks. Presently, the only data in this block is the
+keyword `position` followed by 2 numeric values indicating the fractional
+coordinates of the cylinder axis in the (2D) unit cell. For example:
+`Cylinder2D{  position  0.0  0.0  }`.
+
+The core options and particles can be specified in any order that makes sense to the user.
+
+#### NetworkGenerator
+
+[Back to Top](#pscf-field-generator)
+
+This block indicates that a network structure should be generated using the level-set
+method. The block is indicated in the input file with a `NetworkGenerator{ . . . }` block.
+The level-set method requires converting a small number of symmetry-adapted basis functions
+(typically the first non-zero basis) into a real-space grid, and using that to find and
+set the field according to the level-set. 
+This conversion is done through the Fortran version of PSCF.
+Although the C++/CUDA version
+is capable of this conversion, a workflow through the Fortran software is the only one
+currently implemented for this tool.
+Also note that the restriction to Fortran is only for the internal basis-to-grid conversion;
+the parameter file driving the method and
+and the final RGRID file (specified by `output_file` in the _PscfFieldGen_ block)
+can still be compatible with the C++/CUDA codes.
+
+To facilitate this conversion, the user needs to provide a PSCF (Fortran) parameter file
+set to perform the conversion. This parameter file should contain only the system
+definition and the `FIELD_TO_RGRID` command. 
+(It is not critical that the specified polymer structures exactly match those in the
+intended calculation, as iterations are not performed during the conversion. 
+Thus, the polymer in this conversion file can simply be a multi-block with one
+block of each monomer type.)
+Within the _NetworkGenerator_ block,
+the name of this conversion file is given following the `network_param` keyword.
+
+The user also must provide a template symmetry-adapted basis field file compatible
+with the `network_param` file. This template file is used to set the format,
+but also to allow the user to define the number and weighting of the basis functions
+being defined for the level set. For this latter purpose, the template field file
+should be written as if _monomer 0_ were going to be placed in the core of the
+network, regardless of which monomer is expected to be in the core in the eventual
+generated field. The coefficients assigned to monomer 0 in the template file will
+be assigned to the chosen core monomer during field generation, with coefficients
+for the remaining monomers chosen to balance this.
+
+If a user intends to use the default set of monomers as core options, the name
+of this template field file can be provided directly within the _NetworkGenerator_
+block using the keyword `star_file` after the network param file. If, instead, the
+user wishes to specify a set of core options, the network param file should be 
+followed by a `NetworkCrystal{ . . . }` block. In this case, the `star_file` keyword
+would be placed inside the _NetworkCrystal_ block, along with any number of 
+`core_option` keywords required to define the preferred set of core options.
+The order of the `star_file` and `core_option` keywords does not matter.
+
+Altogether, a possible input for a network phase could look like the following.
+
+```
+PscfFieldGen{
+    software        pscf
+    parameter_file  param_iterate
+    output_file     rho_rgrid.in
+    
+    NetworkGenerator{
+        
+        network_param   param_convert
+        
+        NetworkCrystal{
+        
+            core_option 0
+            core_option 1
+            
+            star_file   rho_template
+        }
+    }
+}
+```
+
+*Operation Note* : The internal operations of pscfFieldGen during this level-set
+method are performed in a directory called `_network_generator_internal_`.
+This directory is created within the same directory from which
+the program was invoked (the working directory). Its contents are left in
+place as a record of the generation process, but were placed in a separate directory
+avoid cluttering the working directory. Deletion of this record after field generation
+is allowed if the user does not wish to keep it.
+
+#### LamellarGenerator
+
+[Back to Top](#pscf-field-generator)
+
+Given the simplicity of the Lamellar structure, the _LamellarGenerator_ block is
+similarly simple. Unlike with particles or network phases, the lamellar generation
+algorithm does not use a concept of a "core" monomer. Rather, in order to ensure the
+generated field does not produce non-physical density profiles, the monomer with the
+lowest-overall volume fraction is automatically used as a reference.
+
+Because no additional inputs are required for this structure, the _LamellarGenerator_
+block can be specified in any of three ways:
+
+ * As an empty block: `LamellarGenerator{    }`
+ * As a block-like keyword: `LamellarGenerator{}`  (note the lack of white-space between
+the brackets.
+ * As a _CamelCase_ keyword: `LamellarGenerator`   (note the absence of brackets altogether).
 
 ### Parameter File
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 For detailed information regarding the parameter file format, please see the 
 User manual for the specific version of PSCF.
@@ -279,7 +452,7 @@ the parameter file for the desired calculation, and use it to generate the initi
 
 ## Special Notes
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 **Input particle positions should be precise to at least 4 decimal places:**
 When generating the unit cell structure, particle positions are considered

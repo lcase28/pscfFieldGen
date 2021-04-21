@@ -255,7 +255,8 @@ class MotifCrystal(BasisCrystal):
         super().__init__(motif, lattice, core_options)
         # Motif Particles have been collected in self._basis ParticleSet object
         self._motif = self._basis
-        basisParticles = self._space_group.applyToAll(self._motif, self._motif.particles)
+        basisParticles = [] # Empty list in which to build full particle set
+        basisParticles = self._space_group.applyToAll(self._motif, target=basisParticles)
         self._basis = ParticleSet(basisParticles)
     
     @classmethod
@@ -277,13 +278,13 @@ class MotifCrystal(BasisCrystal):
             raise(ValueError("Expected Key 'MotifCrystal{{'; got '{}'".format(entrykey)))
         TRACER.trace("Generating MotifCrystal.",TraceLevel.EVENT)
         lattice = param.getLattice()
-        TRACER.trace("\tUsing Lattice: {}.".format(lattice),TraceLevel.ALL)
+        TRACER.trace("\tUsing Lattice: {}.",TraceLevel.ALL,lattice)
         crystalsys = param.crystal_system
-        TRACER.trace("\tUsing Crystal System: {}.".format(crystalsys),TraceLevel.ALL)
+        TRACER.trace("\tUsing Crystal System: {}.",TraceLevel.ALL, crystalsys)
         group = param.group_name
-        TRACER.trace("\tUsing Group Name: {}.".format(lattice),TraceLevel.ALL)
-        spaceGroup = SpaceGroup(lattice.dim,group,crystalsys)
-        TRACER.trace("\tUsing SpaceGroup: {}.".format(lattice),TraceLevel.RESULT)
+        TRACER.trace("\tUsing Group Name: {}.",TraceLevel.ALL, group)
+        spaceGroup = SpaceGroup( lattice.dim, crystalsys, group )
+        TRACER.trace("\tUsing SpaceGroup: {}.",TraceLevel.RESULT, spaceGroup)
         nmon = param.nMonomer
         
         core_options = [i for i in range(param.nMonomer)] # default
@@ -308,9 +309,9 @@ class MotifCrystal(BasisCrystal):
             else:
                 msg = "Unrecognized Key '{}' in MotifCrystal{{...}} block."
                 raise(ValueError(msg.format(word)))
-        TRACER.trace("Using Crystal Core Options: {}.".format(core_options),TraceLevel.RESULT)
+        TRACER.trace("Using Crystal Core Options: {}.",TraceLevel.RESULT, core_options)
         out = cls(spaceGroup, particles, lattice, core_options)
-        TRACER.trace("Built Crystal From Motif:\n\t{}.".format(out.longstring),TraceLevel.RESULT)
+        TRACER.trace("Built Crystal From Motif:\n{}.",TraceLevel.RESULT, out.longString)
         TRACER.trace("Done building MotifCrystal.",TraceLevel.EVENT)
         return out
     

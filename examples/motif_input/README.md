@@ -3,7 +3,6 @@
 The examples in this collection illustrate how to run pscfFieldGen by
 supplying a representative motif of particles and allowing space group
 symmetry to generate the full set of positions.
-This represents the model file setting `coord_input_style   motif`.
 All examples in this collection use PSCF (Fortran) for
 field format conversions and SCFT calculations after running pscfFieldGen.
 
@@ -47,16 +46,19 @@ The script acts as a shorthand for the following
 commands, which could be used directly
 
 ```
-python -m pscfFieldGen -f model -t > generationLog
+python -m pscfFieldGen -f model -v > generationLog
 pscf < param_kgrid > conversionLog
 ```
 
-The first line of the script uses the traced invocation of pscfFieldGen
-to generate a KGRID field file ('rho_kgrid.in'). The traced invocation 
-(flag `-t`) causes the program to echo the input read from *model*.
-After echoing this data, the program subsequently prints the details of
-the Lattice it will use, the crystal structure it will use, and output
-notice of key steps in its calculation. The addition of ` > generationLog`
+The first line of the script uses the verbose invocation of pscfFieldGen
+to generate a KGRID field file ('rho_kgrid.in'). The verbose invocation 
+(flag `-v`) causes the program to echo the input read from *model*.
+In addition to echoing the input read from *model*, the program also
+outputs data related to the Lattice it will use, 
+the crystal structure it will use, and other results obtained during setup.
+Generation of the field itself is a silent procedure at the *verbose* level
+except to print messages at the start and end of field generation.
+The addition of ` > generationLog`
 at the end of the command redirects this output to a file 'generationLog'.
 
 The second line executes PSCF using the parameter file 'param_kgrid'.
@@ -81,7 +83,7 @@ on the command line from within the example's directory.
 This script is equivallent to the following commands
 
 ```
-python -m pscfFieldGen -f model -t > generationLog
+python -m pscfFieldGen -f model -v > generationLog
 pscf < param_kgrid > conversionLog
 pscf < param_converge > solutionLog
 ```
