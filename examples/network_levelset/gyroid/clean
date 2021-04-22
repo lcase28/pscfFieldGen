@@ -1,0 +1,19 @@
+fieldsList=(./rho_rgrid.in ./rho ./omega ./rho_rgrid)
+for fileRoot in ${fieldsList[@]}; do
+    if [ -f "${fileRoot}" ]; then
+        rm "${fileRoot}"
+    fi
+    if [ -f "${fileRoot}.in" ]; then
+        rm "${fileRoot}.in"
+    fi
+done
+
+fileList=(./out ./generationLog ./solutionLog)
+for fileRoot in ${fileList[@]}; do
+    if [ -f "${fileRoot}" ]; then
+        rm "${fileRoot}"
+    fi
+done
+
+rm ./_network_generator_internal_/*
+rmdir ./_network_generator_internal_

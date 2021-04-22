@@ -1,0 +1,2 @@
+python -m pscfFieldGen -f model -v > generationLog
+pscf < param > solutionLog

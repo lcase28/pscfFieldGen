@@ -55,14 +55,14 @@ def generate_field_file(param, calculator, kgridFileName):
         kgrid = param.cleanWaveFieldFile()
         kgrid.fields = newField
         kgrid.write(kgridFileName.open(mode='w'))
-    elif isinstance(calculator, LamellarFieldGen):
+    elif isinstance(calculator, LamellarGenerator):
         newField = calculator.to_field(monFrac)
         star = param.cleanStarFieldFile(2) # This option only available for lamellar.
         star.fields = newField
         star.write(kgridFileName.open(mode='w'))
-    elif isinstance(calculator,NetworkFieldGen):
+    elif isinstance(calculator,NetworkGenerator):
         root = kgridFileName.parent
-        newField = calculator.to_rgrid(monFrac,param.file,root)
+        newField = calculator.to_rgrid(monFrac,param.file,pathlib.Path.cwd())
         rgrid = param.cleanCoordFieldFile()
         rgrid.fields = newField
         rgrid.write(kgridFileName.open('w'))
@@ -345,9 +345,6 @@ class NetworkGenerator:
         """
         self._param = pfile
         self._crystal = crystal
-        inputFname = self._param.fieldTransforms[0][1]
-        inputFname += "_internal"
-        self._param.fieldTransforms[0][1] = inputFname
         self._sym_name = pfile.fieldTransforms[0][1]
     
     @classmethod
@@ -394,11 +391,11 @@ class NetworkGenerator:
     
     def _to_raw_rgrid(self):
         outfile = "networkgenlog"
-        pfile = "param_network_internal"
+        pfile = "param_internal"
         with open(pfile,'w') as f:
             self._param.write(f)
         with open(self._sym_name,'w') as f:
-            self._crystal.write(f)
+            self._crystal.writeField(f)
         with open(pfile) as fin:
             with open(outfile,'w') as fout:
                 lastLaunch = subprocess.run("pscf",stdin=fin,stdout=fout)
@@ -423,11 +420,15 @@ class NetworkGenerator:
             root in order to isolate its internal files.
         """
         self._param.cell_param = deepcopy(param.cell_param)
+        nmon = self._param.N_monomer
         coreMon = self._crystal.update(frac, self._param.cell_param)
+        fcore = frac[coreMon]
+        fnonCore = 1.0 - fcore
         
         # Convert symmetrized rho to coordinate grid using PSCF
         internalroot = root/"_network_generator_internal_"
-        internalroot.mkdir()
+        if not internalroot.is_dir():
+            internalroot.mkdir()
         with contexttools.cd(internalroot):
             rgrid_raw = self._to_raw_rgrid()
         rgrid = np.zeros_like(rgrid_raw)

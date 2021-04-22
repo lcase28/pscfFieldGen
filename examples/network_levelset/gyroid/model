@@ -1,0 +1,19 @@
+PscfFieldGen{
+    
+    software        pscf
+    parameter_file  param
+    output_file     rho_rgrid.in
+    
+    NetworkGenerator{
+        
+        network_param   param_levelset
+        
+        NetworkCrystal{
+            
+            core_option 0
+            core_option 1
+            
+            star_file   rho_template
+        }
+    }
+}

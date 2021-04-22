@@ -62,6 +62,18 @@ Available morphologies are:
  * 3-Dimensional
     * BCC Spheres (`bcc')
 
+## Network Phases
+
+Examples in the directory 'network_levelset' illustrate how to run the guess generator
+for network phases using the levelset method.
+Regardless of which PSCF version your final calculation will be done in,
+be sure that the Fortran version is installed, as this is the version used
+for the field conversions done during the level-set method.
+Available morphologies are:
+    
+    * 3-Dimensional
+        * Gyroid (`gyroid`)
+
 ## Monomer Selection
 
 Examples in the directory 'monomer_selection/' reverse the block fractions of some of the
