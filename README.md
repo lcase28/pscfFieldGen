@@ -1,10 +1,11 @@
-# PSCF Particle Phase Field Generator
+# PSCF Field Generator
 
-A tool to generate PSCF initial guess files for bulk morphologies involving assemblies of
+A tool to generate PSCF initial guess files for bulk morphologies 
+involving lamellae, network phases, or particle phases, such as
 3D spherical or 2D cylindrical particles.
 
-**NOTE:** This is a beta release. See Notes section at the bottom of this file for special
-assumptions made in its operation.
+**NOTE:** See Notes section at the bottom of this file for special
+assumptions made in software operation.
 
 ## Contents
 
@@ -15,14 +16,16 @@ assumptions made in its operation.
         * [Adding to PYTHONPATH](#adding-to-pythonpath)
         * [Anaconda Python](#anaconda-python)
  * [Running pscfFieldGen](#running-pscffieldgen)
-    * [Model File](#model-file)
-    * [Parameter File](#parameter-file)
+   * [Particle Model File](#particle-model-file)
+   * [Network Model File](#network-model-file)
+   * [Lamellar Model File](#lamellar-model-file)
+   * [Parameter File](#parameter-file)
  * [Special Notes](#special-notes)
         
 
 ## Requirements
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 **Use of this tool requires Python 3.5 or later** as it makes use of some of the newer additions
 to the standard library.
@@ -60,11 +63,11 @@ such as `import abc`.
 
 ## Installation
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 ### Obtaining Source Code
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 The source code for the tool is hosted on Github. The easiest way to obtain the code is
 with a git version control client. If such a client is installed on your computer,
@@ -82,14 +85,14 @@ analogous folder.
 
 ### Modifying Search Paths
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 To allow the operating system and python interpreter to find the pscfFieldGen program, 
 you will have to make some modifications to environment variables.
 
 #### Adding to PYTHONPATH
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 Many python installations make use of the environment variable PYTHONPATH when searching
 for modules. To add pscfFieldGen to this search path, use the following command
@@ -104,7 +107,7 @@ or to ~/.profile (on Mac OS).
 
 #### Anaconda Python
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 With Anaconda Python and other conda-managed environments, changes to the PYTHONPATH
 environment variable often are not reflected in the python interpreter's effective
@@ -160,16 +163,18 @@ is one possibility.
 
 ## Running pscfFieldGen
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
-Running the software requires 2 files:
+Running the software requires (a minimum of) 2 files:
 
  * A Model file specifying filenames and particle positions.
  * A PSCF parameter file.
 
 In order to simplify input for the user, crystallographic and composition information
 are taken from a PSCF parameter file. 
-Detailed information about the model file is provided in the next subsection.
+Details about the model file are specified in the next three subsections.
+Additional files are required for network
+phases, and are detailed in the section [Network Model](#network-model-file).
 
 After the tool has been installed, and is discoverable by your Python interpreter,
 and after you have produced the two necessary input files, the program can be run
@@ -198,9 +203,9 @@ where "trace_file" is the name of the file storing the trace data.
 Example files for a range of calculations are included in the `examples` directory in
 the root of the project repository.
 
-### Model File
+### Particle Model File
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 The Model file acts as the primary input for the program. Data in this file is specified
 by *case-sensitive* keywords. 
@@ -213,6 +218,7 @@ Below is an example of what the contents of a model file might look like for a B
 software            pscf
 parameter_file      param_kgrid
 output_file         rho_kgrid
+structure_type      particle
 
 core_monomer        0
 
@@ -240,6 +246,8 @@ whose positions will be specified in this input file.
 for each particle. For a 2-Dimensional system, this means 2(`N_particles`) coordinates are
 expected. For a 3-Dimensional system, 3(`N_particles`) coordinates are expected.
 Both `parameter_file` and `N_particles` must be specified before `particle_positions`.
+ * `structure_type` : For particle phases, this keyword should be followed by the
+flag *particle*, indicating that a particle phase is being generated.
 
 Three additional fields are recommended, but not required. If omitted, default values will
 be assumed, and a warning message will be printed informing the user that a default will be used.
@@ -266,9 +274,122 @@ users who prefer to have explicit file termination markers.
 
 Presence of any unrecognized keywords will raise an error and terminate the program.
 
+### Network Model File
+
+[Back to Top](#pscf-field-generator)
+
+The Model file acts as the primary input for the program. Data in this file is specified
+by *case-sensitive* keywords. 
+Formatting is flexible, requiring only that individual entries be separated
+by some amount of whitespace (spaces, tabs, newlines).
+*Presently, network field generation works only for the Fortran version of PSCF.*
+
+Below is an example of what the contents of a model file might look like for any
+network phase.
+
+```
+software            pscf
+parameter_file      param_kgrid
+output_file         rho_rgrid.in
+structure_type      network
+
+network_parameter_file  param_field
+network_star_file       rho
+core_monomer        0
+
+finish
+```
+
+Five fields are required:
+
+ * `software` : This keyword would be followed by a flag indicating the PSCF version
+this execution is targeting. Currently *pscf* (for the Fortran version) is the
+only acceptable value for this input. This should be
+the first entry in the model file, and is required before specifying `parameter_file`.
+ * `parameter_file` : This keyword would be followed by a single file name referencing
+the parameter file that will be used for the desired calculation.
+The 'file name' in this case can be any path that would allow the
+file to be found from the current directory.
+ * `output_file` : This keyword is followed by a single file name to which the generated field
+should be written. As with `parameter_file`, this can be any path recognizable from the current
+directory. This should be placed immediately following the 
+`parameter_file` specification.
+ * `structure_type` : This keyword should be followed by the flag `network` for network phases.
+ * `network_parameter_file` : This keyword should be followed by a file name referencing
+a PSCF parameter file specifying the operations to convert a symmetry-adapted field file to a
+real-space grid field file. Through the *Basis* section, this parameter file should be identical
+to the parameter file referenced for the keyword `parameter_file`. Following that section
+should be a single `FIELD_TO_RGRID` command which will be used internally by pscfFieldGen
+to convert the symmetry-adapted field to a real-space grid.
+ * `network_star_file` : This keywork should be followed by a file name referencing a 
+template PSCF field file. This field file should be written as if the level-set method
+for the intended phase were being generated with monomer 0 in the core. That is,
+the homogeneous basis function (0,0,0) should have all coefficients of 0.0, and the
+remaining basis functions should have coefficients specifying the weight of that basis
+function in the used field file. In each case, the coefficients specified for monomer 0
+in this field file will be assigned to the chosen core monomer during field generation
+and the remaining coefficients will be assigned proportionally.
+*Note: In this format, monomer 0 refers to the first monomer, and the weights used for
+the core monomer (regardless of which monomer ultimately is placed in the core) will
+be the first coefficient listed for each basis function.*
+ 
+
+One additional field is recommended, but not required:
+
+ * `core_monomer` : This keyword specifies, by monomer id, which monomer should be taken to form
+the core of the particles in the assembly. Monomers are indexed starting at 0 and counting up.
+(This numbering differs from the Fortran numbering, which starts at 1). The default value is 0.
+
+Finally, the keyword `finish` is followed by no data and identifies the end of the model file.
+Use of the `finish` keyword is entirely optional, and is included as an aesthetic option for
+users who prefer to have explicit file termination markers.
+
+Presence of any unrecognized keywords will raise an error and terminate the program.
+
+### Lamellar Model File
+
+[Back to Top](#pscf-field-generator)
+
+The Model file acts as the primary input for the program. Data in this file is specified
+by *case-sensitive* keywords. 
+Formatting is flexible, requiring only that individual entries be separated
+by some amount of whitespace (spaces, tabs, newlines).
+
+Below is an example of what the contents of a model file might look like for a lamellar phase.
+
+```
+software            pscf
+parameter_file      param
+output_file         rho.in
+structure_type      lamellar
+finish
+```
+
+All four fields are required.
+
+ * `software` : This keyword would be followed by a flag indicating the PSCF version
+this execution is targeting. Currently *pscf* (for the Fortran version) is the
+only acceptable value for this input. This should be
+the first entry in the model file, and is required before specifying `parameter_file`.
+ * `parameter_file` : This keyword would be followed by a single file name referencing
+the parameter file that will be used for the desired calculation.
+The 'file name' in this case can be any path that would allow the
+file to be found from the current directory.
+ * `output_file` : This keyword is followed by a single file name to which the generated field
+should be written. As with `parameter_file`, this can be any path recognizable from the current
+directory. This should be placed immediately following the 
+`parameter_file` specification.
+ * `structure_type` : This keyword should be followed by the flag `lamellar` for a lamellar phase.
+
+Finally, the keyword `finish` is followed by no data and identifies the end of the model file.
+Use of the `finish` keyword is entirely optional, and is included as an aesthetic option for
+users who prefer to have explicit file termination markers.
+
+Presence of any unrecognized keywords will raise an error and terminate the program.
+
 ### Parameter File
 
-[Back to Top](#pscf-particle-phase-field-generator)
+[Back to Top](#pscf-field-generator)
 
 For detailed information regarding the parameter file format, please see the 
 User manual for the specific version of PSCF.

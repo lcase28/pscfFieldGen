@@ -325,9 +325,6 @@ def _read_lamellar_input(words, param, trace, omissionWarnings):
     ValueError : 
         When Parameter File dimensionality > 1
     """
-    word = next(words)
-    if not word == 'finish':
-        raise(ValueError("Expected 'finish' flag"))
     if not param.dim == 1:
         raise(ValueError("Lamellar Field requires 1-dimensional parameter file"))
     return LamellarFieldGen()
@@ -886,6 +883,10 @@ class NetworkFieldGen(object):
         inputFname += "_internal"
         self._param.fieldTransforms[0][1] = inputFname
         self._sym_name = pfile.fieldTransforms[0][1]
+        # Read Star Weights
+        self._star_weights = np.zeros(self._sym.N_star)
+        for i in range(1,self._sym.N_star):
+            self._star_weights[i] = self._sym.fields[i][0]
     
     def _to_raw_rgrid(self):
         outfile = "networkgenlog"
@@ -908,11 +909,13 @@ class NetworkFieldGen(object):
         fcore = frac[coreMon]
         fnonCore = 1-fcore
         nmon = len(frac)
-        for i in range(nmon):
-            if i == coreMon:
-                self._sym.fields[1,i] = 1.0
-            else:
-                self._sym.fields[1,i] = -frac[i]/fnonCore
+        for j in range(1,self._sym.N_star):
+            weight = self._star_weights[j]
+            for i in range(nmon):
+                if i == coreMon:
+                    self._sym.fields[1,i] = weight
+                else:
+                    self._sym.fields[1,i] = -weight * (frac[i]/fnonCore)
         
         # Convert symmetrized rho to coordinate grid using PSCF
         internalroot = root/"_network_generator_internal_"
