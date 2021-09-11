@@ -460,7 +460,20 @@ class CoordFieldFile(FieldFile):
            if file is a field object, it must be open for writing
         '''
         super().write(file, major, minor)
-
+    
+    def valueRanges(self):
+        '''
+        Return the difference between the maximum and minimum
+        value in the coordinate fields of each monomer.
+        
+        Returns
+        -------
+        ranges : numpy array
+            Returns the range of values found in each monomer's field.
+        '''
+        return np.amax(self.fields, axis=0) - np.amin(self.fields, axis=0)
+        
+    
     # Overriding inherited abstract methods
     def addMonomer(self, value = 0.0):
         '''
