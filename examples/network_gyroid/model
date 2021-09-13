@@ -1,0 +1,10 @@
+software        pscf
+parameter_file  param
+output_file     rho_rgrid.in
+structure_type  network
+
+network_parameter_file  param_field
+network_star_file       rho
+core_monomer            0
+
+finish

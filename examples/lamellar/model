@@ -1,0 +1,5 @@
+software        pscf
+parameter_file  param
+output_file     rho.in
+structure_type  lamellar
+finish
